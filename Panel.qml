@@ -142,14 +142,258 @@ Panel {
                     }
 
                     // =========================================================
-                    // SLIDE 1: Timer, Tag-Dropdown & GitHub-Heatmap
+                    // SLIDE 1: Timer & Tag GANZ WEIT OBEN, dann Steuerung & Heatmap
                     // =========================================================
                     Column {
                         width: parent.width
-                        spacing: Style.space(14)
+                        spacing: Style.space(12)
                         visible: root.currentTab === 0
 
-                        // Modus-Wahl (Pomodoro vs Stoppuhr)
+                        // -----------------------------------------------------
+                        // 1. GANZ WEIT OBEN: Timer-Minuten + Tag daneben
+                        // -----------------------------------------------------
+                        Column {
+                            width: parent.width
+                            spacing: Style.space(6)
+
+                            // Zentrierte Zeile: [ 25:00 ]   [ 🏷️ Mathe ▾ ]
+                            Row {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                spacing: Style.space(16)
+
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: root.rootWidget ? root.rootWidget.formattedTime() : "00:00"
+                                    color: root.rootWidget && root.rootWidget.isRunning ? Color.accent : root.fg
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.displayLarge * 1.6
+                                    font.bold: true
+                                }
+
+                                // Klickbares Tag-Pill
+                                Rectangle {
+                                    id: tagPill
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    height: Style.space(34)
+                                    width: tagPillRow.implicitWidth + Style.space(20)
+                                    radius: Style.space(17)
+                                    color: root.tagMenuOpen
+                                        ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.28)
+                                        : (tagPillMouse.containsMouse
+                                            ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.18)
+                                            : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.08))
+                                    border.width: 1.5
+                                    border.color: root.tagMenuOpen
+                                        ? Color.accent
+                                        : (tagPillMouse.containsMouse ? Color.accent : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.22))
+
+                                    Row {
+                                        id: tagPillRow
+                                        anchors.centerIn: parent
+                                        spacing: Style.space(6)
+
+                                        Text {
+                                            text: "🏷️"
+                                            font.pixelSize: Style.font.body
+                                            anchors.verticalCenter: parent.verticalCenter
+                                        }
+
+                                        Text {
+                                            text: root.rootWidget ? root.rootWidget.activeTag : "Mathe"
+                                            font.family: Style.font.family
+                                            font.pixelSize: Style.font.body
+                                            font.bold: true
+                                            color: Color.accent
+                                            anchors.verticalCenter: parent.verticalCenter
+                                        }
+
+                                        Text {
+                                            text: root.tagMenuOpen ? "󰅃" : "󰅀"
+                                            font.family: Style.font.family
+                                            font.pixelSize: Style.font.caption
+                                            color: Color.accent
+                                            anchors.verticalCenter: parent.verticalCenter
+                                        }
+                                    }
+
+                                    MouseArea {
+                                        id: tagPillMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            root.tagMenuOpen = !root.tagMenuOpen
+                                            if (root.tagMenuOpen) {
+                                                Qt.callLater(function() {
+                                                    tagSearchField.forceActiveFocus()
+                                                })
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Status-Text
+                            Text {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: {
+                                    if (!root.rootWidget) return ""
+                                    if (!root.rootWidget.isRunning) return "Lerneinheit pausiert"
+                                    if (root.rootWidget.activeMode === "pomodoro") {
+                                        return (root.rootWidget.pomodoroPhase === "work" ? "Fokus auf: " : "Pause: ") + root.rootWidget.activeTag
+                                    }
+                                    return "Stoppuhr aktiv für: " + root.rootWidget.activeTag
+                                }
+                                color: root.rootWidget && root.rootWidget.isRunning ? root.fg : root.dim
+                                font.family: Style.font.family
+                                font.pixelSize: Style.font.caption
+                            }
+
+                            // -------------------------------------------------
+                            // KOMPAKTES AUSKLAPP-MENÜ (Eingabe + Pills untereinander)
+                            // -------------------------------------------------
+                            Rectangle {
+                                id: tagDropdown
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                width: Style.space(260)
+                                visible: root.tagMenuOpen
+                                implicitHeight: tagDropCol.implicitHeight + Style.space(16)
+                                radius: Style.space(10)
+                                color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.06)
+                                border.width: 1.5
+                                border.color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.45)
+                                clip: true
+
+                                Column {
+                                    id: tagDropCol
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.top: parent.top
+                                    anchors.margins: Style.space(8)
+                                    spacing: Style.space(6)
+
+                                    // Eingabefeld ("fängt einfach an zu tippen")
+                                    TextField {
+                                        id: tagSearchField
+                                        width: parent.width
+                                        placeholderText: "Neues Tag tippen... [Enter]"
+                                        font.pixelSize: Style.font.bodySmall
+                                        horizontalPadding: Style.space(10)
+                                        verticalPadding: Style.space(6)
+                                        onAccepted: {
+                                            if (root.rootWidget && text.trim().length > 0) {
+                                                root.rootWidget.addTag(text.trim())
+                                                text = ""
+                                                root.tagMenuOpen = false
+                                            }
+                                        }
+                                    }
+
+                                    // Vorhandene Tags untereinander in Pill-Form
+                                    Column {
+                                        width: parent.width
+                                        spacing: Style.space(4)
+
+                                        Repeater {
+                                            model: {
+                                                var all = root.rootWidget ? root.rootWidget.recentTags : []
+                                                var q = tagSearchField.text.trim().toLowerCase()
+                                                if (q.length === 0) return all
+                                                return all.filter(function(t) { return t.toLowerCase().indexOf(q) !== -1 })
+                                            }
+
+                                            Rectangle {
+                                                width: parent.width
+                                                height: Style.space(28)
+                                                radius: Style.space(14)
+                                                color: (root.rootWidget && root.rootWidget.activeTag === modelData)
+                                                    ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.28)
+                                                    : (pillMouse.containsMouse
+                                                        ? Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.12)
+                                                        : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.04))
+                                                border.width: 1
+                                                border.color: (root.rootWidget && root.rootWidget.activeTag === modelData)
+                                                    ? Color.accent
+                                                    : (pillMouse.containsMouse ? Color.accent : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.15))
+
+                                                Row {
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    anchors.left: parent.left
+                                                    anchors.leftMargin: Style.space(12)
+                                                    spacing: Style.space(8)
+
+                                                    Text {
+                                                        text: "🏷️"
+                                                        font.pixelSize: Style.font.caption
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                    }
+
+                                                    Text {
+                                                        text: modelData
+                                                        font.family: Style.font.family
+                                                        font.pixelSize: Style.font.bodySmall
+                                                        font.bold: root.rootWidget && root.rootWidget.activeTag === modelData
+                                                        color: (root.rootWidget && root.rootWidget.activeTag === modelData) ? Color.accent : root.fg
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                    }
+                                                }
+
+                                                MouseArea {
+                                                    id: pillMouse
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: {
+                                                        if (root.rootWidget) {
+                                                            root.rootWidget.activeTag = modelData
+                                                        }
+                                                        tagSearchField.text = ""
+                                                        root.tagMenuOpen = false
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // -----------------------------------------------------
+                        // 2. STEUERUNGS-BUTTONS (Start/Pause, Speichern, Zurücksetzen)
+                        // -----------------------------------------------------
+                        Row {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            spacing: Style.space(10)
+
+                            Button {
+                                text: root.rootWidget && root.rootWidget.isRunning ? "Pause" : "Start"
+                                iconText: root.rootWidget && root.rootWidget.isRunning ? "󰏤 " : "󰐊 "
+                                bordered: true
+                                selected: root.rootWidget && root.rootWidget.isRunning
+                                fontSize: Style.font.body
+                                onClicked: if (root.rootWidget) root.rootWidget.toggleRunning()
+                            }
+
+                            Button {
+                                text: "Session Speichern"
+                                iconText: "󰆓 "
+                                bordered: true
+                                fontSize: Style.font.body
+                                onClicked: if (root.rootWidget) root.rootWidget.finishAndSave()
+                            }
+
+                            Button {
+                                text: "Zurücksetzen"
+                                iconText: "󰑐 "
+                                bordered: true
+                                fontSize: Style.font.body
+                                onClicked: if (root.rootWidget) root.rootWidget.resetTimer()
+                            }
+                        }
+
+                        // -----------------------------------------------------
+                        // 3. MODUS & PHASEN
+                        // -----------------------------------------------------
                         RowLayout {
                             width: parent.width
 
@@ -186,7 +430,7 @@ Panel {
                             }
                         }
 
-                        // Pomodoro-Phasen (wenn Pomodoro aktiv)
+                        // Pomodoro-Phasen
                         Column {
                             width: parent.width
                             spacing: Style.space(6)
@@ -242,341 +486,12 @@ Panel {
                             }
                         }
 
-                        // -----------------------------------------------------
-                        // HAUPTZEILE: Timer-Minuten + Ausklappbares Tag daneben
-                        // -----------------------------------------------------
-                        Column {
-                            width: parent.width
-                            spacing: Style.space(8)
-
-                            // Horizontale Zeile: [ 25:00 ]  [ 🏷️ Mathe ▾ ]
-                            Row {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                spacing: Style.space(16)
-
-                                // Große Minuten/Sekunden Anzeige
-                                Text {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: root.rootWidget ? root.rootWidget.formattedTime() : "00:00"
-                                    color: root.rootWidget && root.rootWidget.isRunning ? Color.accent : root.fg
-                                    font.family: Style.font.family
-                                    font.pixelSize: Style.font.displayLarge * 1.55
-                                    font.bold: true
-                                }
-
-                                // Klickbares Tag-Pill rechts neben den Minuten
-                                Rectangle {
-                                    id: tagPill
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    height: Style.space(36)
-                                    width: tagPillRow.implicitWidth + Style.space(22)
-                                    radius: Style.space(18)
-                                    color: root.tagMenuOpen
-                                        ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.28)
-                                        : (tagPillMouse.containsMouse
-                                            ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.18)
-                                            : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.08))
-                                    border.width: 1.5
-                                    border.color: root.tagMenuOpen
-                                        ? Color.accent
-                                        : (tagPillMouse.containsMouse ? Color.accent : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.22))
-
-                                    Row {
-                                        id: tagPillRow
-                                        anchors.centerIn: parent
-                                        spacing: Style.space(7)
-
-                                        Text {
-                                            text: "🏷️"
-                                            font.pixelSize: Style.font.body
-                                            anchors.verticalCenter: parent.verticalCenter
-                                        }
-
-                                        Text {
-                                            text: root.rootWidget ? root.rootWidget.activeTag : "Mathe"
-                                            font.family: Style.font.family
-                                            font.pixelSize: Style.font.body
-                                            font.bold: true
-                                            color: Color.accent
-                                            anchors.verticalCenter: parent.verticalCenter
-                                        }
-
-                                        Text {
-                                            text: root.tagMenuOpen ? "󰅃" : "󰅀"
-                                            font.family: Style.font.family
-                                            font.pixelSize: Style.font.bodySmall
-                                            color: Color.accent
-                                            anchors.verticalCenter: parent.verticalCenter
-                                        }
-                                    }
-
-                                    MouseArea {
-                                        id: tagPillMouse
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: {
-                                            root.tagMenuOpen = !root.tagMenuOpen
-                                            if (root.tagMenuOpen) {
-                                                Qt.callLater(function() {
-                                                    tagSearchField.forceActiveFocus()
-                                                })
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Status-Text unter der Zeit
-                            Text {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                text: {
-                                    if (!root.rootWidget) return ""
-                                    if (!root.rootWidget.isRunning) return "Session pausiert"
-                                    if (root.rootWidget.activeMode === "pomodoro") {
-                                        return (root.rootWidget.pomodoroPhase === "work" ? "Fokus auf: " : "Pause: ") + root.rootWidget.activeTag
-                                    }
-                                    return "Stoppuhr aktiv für: " + root.rootWidget.activeTag
-                                }
-                                color: root.rootWidget && root.rootWidget.isRunning ? root.fg : root.dim
-                                font.family: Style.font.family
-                                font.pixelSize: Style.font.caption
-                            }
-
-                            // -------------------------------------------------
-                            // AUSKLAPPBARES TAG-MENÜ (direkt darunter)
-                            // -------------------------------------------------
-                            Rectangle {
-                                id: tagDropdownCard
-                                width: parent.width
-                                visible: root.tagMenuOpen
-                                implicitHeight: tagDropCol.implicitHeight + Style.space(22)
-                                radius: Style.space(10)
-                                color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.05)
-                                border.width: 1.5
-                                border.color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.45)
-                                clip: true
-
-                                Column {
-                                    id: tagDropCol
-                                    anchors.left: parent.left
-                                    anchors.right: parent.right
-                                    anchors.top: parent.top
-                                    anchors.margins: Style.space(12)
-                                    spacing: Style.space(10)
-
-                                    // Eingabefeld ("fängt einfach an zu tippen und erstellt so ein neuen Tag")
-                                    RowLayout {
-                                        width: parent.width
-                                        spacing: Style.space(8)
-
-                                        TextField {
-                                            id: tagSearchField
-                                            Layout.fillWidth: true
-                                            placeholderText: "Neues Tag eingeben oder filtern... [Enter]"
-                                            font.pixelSize: Style.font.body
-                                            onAccepted: {
-                                                if (root.rootWidget && text.trim().length > 0) {
-                                                    root.rootWidget.addTag(text.trim())
-                                                    text = ""
-                                                    root.tagMenuOpen = false
-                                                }
-                                            }
-                                        }
-
-                                        Button {
-                                            text: "Übernehmen"
-                                            iconText: "󰄬 "
-                                            fontSize: Style.font.caption
-                                            bordered: true
-                                            onClicked: {
-                                                if (root.rootWidget && tagSearchField.text.trim().length > 0) {
-                                                    root.rootWidget.addTag(tagSearchField.text.trim())
-                                                    tagSearchField.text = ""
-                                                    root.tagMenuOpen = false
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    // Wenn Text getippt wird, der noch nicht existiert -> Vorschlag zum Erstellen
-                                    Rectangle {
-                                        width: parent.width
-                                        height: Style.space(32)
-                                        radius: Style.space(6)
-                                        color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.15)
-                                        border.width: 1
-                                        border.color: Color.accent
-                                        visible: {
-                                            var q = tagSearchField.text.trim()
-                                            if (q.length === 0) return false
-                                            var all = root.rootWidget ? root.rootWidget.recentTags : []
-                                            return all.indexOf(q) === -1
-                                        }
-
-                                        RowLayout {
-                                            anchors.fill: parent
-                                            anchors.leftMargin: Style.space(10)
-                                            anchors.rightMargin: Style.space(10)
-
-                                            Text {
-                                                text: "󰐕  Neu erstellen: \"" + tagSearchField.text.trim() + "\""
-                                                font.family: Style.font.family
-                                                font.pixelSize: Style.font.bodySmall
-                                                font.bold: true
-                                                color: Color.accent
-                                            }
-
-                                            Item { Layout.fillWidth: true }
-
-                                            Text {
-                                                text: "[Enter]"
-                                                font.family: Style.font.family
-                                                font.pixelSize: Style.font.caption
-                                                color: root.dim
-                                            }
-                                        }
-
-                                        MouseArea {
-                                            anchors.fill: parent
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: {
-                                                if (root.rootWidget && tagSearchField.text.trim().length > 0) {
-                                                    root.rootWidget.addTag(tagSearchField.text.trim())
-                                                    tagSearchField.text = ""
-                                                    root.tagMenuOpen = false
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    // Header: Gespeicherte Tags
-                                    RowLayout {
-                                        width: parent.width
-
-                                        Text {
-                                            text: "GESPEICHERTE TAGS (KLICK ZUM AUSWÄHLEN)"
-                                            font.family: Style.font.family
-                                            font.pixelSize: Style.font.caption * 0.85
-                                            font.bold: true
-                                            color: root.dim
-                                        }
-
-                                        Item { Layout.fillWidth: true }
-
-                                        Text {
-                                            text: (root.rootWidget ? root.rootWidget.recentTags.length : 0) + " Tags"
-                                            font.family: Style.font.family
-                                            font.pixelSize: Style.font.caption * 0.85
-                                            color: root.faint
-                                        }
-                                    }
-
-                                    // Chips der bereits gespeicherten Tags
-                                    Flow {
-                                        width: parent.width
-                                        spacing: Style.space(6)
-
-                                        Repeater {
-                                            model: {
-                                                var all = root.rootWidget ? root.rootWidget.recentTags : []
-                                                var q = tagSearchField.text.trim().toLowerCase()
-                                                if (q.length === 0) return all
-                                                return all.filter(function(t) { return t.toLowerCase().indexOf(q) !== -1 })
-                                            }
-
-                                            Rectangle {
-                                                height: Style.space(28)
-                                                width: chipContentRow.implicitWidth + Style.space(20)
-                                                radius: Style.space(14)
-                                                color: (root.rootWidget && root.rootWidget.activeTag === modelData)
-                                                    ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.3)
-                                                    : (chipMouse.containsMouse
-                                                        ? Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.14)
-                                                        : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.07))
-                                                border.width: 1
-                                                border.color: (root.rootWidget && root.rootWidget.activeTag === modelData)
-                                                    ? Color.accent
-                                                    : (chipMouse.containsMouse ? Color.accent : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.18))
-
-                                                Row {
-                                                    id: chipContentRow
-                                                    anchors.centerIn: parent
-                                                    spacing: Style.space(6)
-
-                                                    Text {
-                                                        text: "🏷️"
-                                                        font.pixelSize: Style.font.caption
-                                                        anchors.verticalCenter: parent.verticalCenter
-                                                    }
-
-                                                    Text {
-                                                        text: modelData
-                                                        font.family: Style.font.family
-                                                        font.pixelSize: Style.font.bodySmall
-                                                        font.bold: root.rootWidget && root.rootWidget.activeTag === modelData
-                                                        color: (root.rootWidget && root.rootWidget.activeTag === modelData) ? Color.accent : root.fg
-                                                        anchors.verticalCenter: parent.verticalCenter
-                                                    }
-                                                }
-
-                                                MouseArea {
-                                                    id: chipMouse
-                                                    anchors.fill: parent
-                                                    hoverEnabled: true
-                                                    cursorShape: Qt.PointingHandCursor
-                                                    onClicked: {
-                                                        if (root.rootWidget) {
-                                                            root.rootWidget.activeTag = modelData
-                                                        }
-                                                        tagSearchField.text = ""
-                                                        root.tagMenuOpen = false
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // Aktions-Buttons (Start/Pause, Speichern, Zurücksetzen)
-                        Row {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            spacing: Style.space(10)
-
-                            Button {
-                                text: root.rootWidget && root.rootWidget.isRunning ? "Pause" : "Start"
-                                iconText: root.rootWidget && root.rootWidget.isRunning ? "󰏤 " : "󰐊 "
-                                bordered: true
-                                selected: root.rootWidget && root.rootWidget.isRunning
-                                fontSize: Style.font.body
-                                onClicked: if (root.rootWidget) root.rootWidget.toggleRunning()
-                            }
-
-                            Button {
-                                text: "Session Speichern"
-                                iconText: "󰆓 "
-                                bordered: true
-                                fontSize: Style.font.body
-                                onClicked: if (root.rootWidget) root.rootWidget.finishAndSave()
-                            }
-
-                            Button {
-                                text: "Zurücksetzen"
-                                iconText: "󰑐 "
-                                bordered: true
-                                fontSize: Style.font.body
-                                onClicked: if (root.rootWidget) root.rootWidget.resetTimer()
-                            }
-                        }
-
                         PanelSeparator {
                             foreground: root.fg
                         }
 
                         // -----------------------------------------------------
-                        // Stunden-Übersicht nach Fach/Tag ("Wie viele Stunden für Mathe...")
+                        // 4. STUNDEN-ÜBERSICHT NACH FACH / TAG
                         // -----------------------------------------------------
                         Column {
                             width: parent.width
@@ -673,7 +588,7 @@ Panel {
                         }
 
                         // -----------------------------------------------------
-                        // 7-Zeilen GitHub-Aktivitätsgraph
+                        // 5. 7-ZEILEN GITHUB-AKTIVITÄTSGRAPH
                         // -----------------------------------------------------
                         Column {
                             width: parent.width
