@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.yourname.study-tracker",
+  "name": "Study Tracker",
+  "version": "1.0.0",
+  "author": "Your Name",
+  "license": "MIT",
+  "description": "Dual-mode study timer with tag logging, activity heatmap, and window tracking.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Study Tracker",
+    "category": "Productivity",
+    "allowMultiple": false,
+    "defaultSection": "center"
+  }
+}
