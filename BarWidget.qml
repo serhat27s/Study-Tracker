@@ -165,12 +165,10 @@ BarWidget {
         repeat: true
         running: true
         onTriggered: {
-            // Uptime regelmäßig mitzählen
             if (root.systemUptimeSeconds > 0) {
                 root.systemUptimeSeconds += 1
             }
 
-            // Nur wenn Timer aktiv läuft: Fenster aufzeichnen
             if (root.isRunning) {
                 var app = root.getCurrentActiveApp()
                 var usage = Object.assign({}, root.currentAppUsage)
@@ -291,9 +289,24 @@ BarWidget {
             tags.splice(idx, 1)
         }
         tags.unshift(clean)
-        if (tags.length > 8) tags = tags.slice(0, 8)
+        if (tags.length > 12) tags = tags.slice(0, 12)
         root.recentTags = tags
         root.saveToDisk()
+    }
+
+    function removeTag(tag) {
+        var clean = String(tag).trim()
+        var tags = root.recentTags.slice()
+        var idx = tags.indexOf(clean)
+        if (idx !== -1) {
+            tags.splice(idx, 1)
+            if (tags.length === 0) tags = ["Allgemein"]
+            root.recentTags = tags
+            if (root.activeTag === clean) {
+                root.activeTag = tags[0]
+            }
+            root.saveToDisk()
+        }
     }
 
     function formattedTime() {
@@ -324,7 +337,7 @@ BarWidget {
         id: button
         anchors.fill: parent
         bar: root.bar
-        text: (root.isRunning ? (root.activeMode === "pomodoro" ? "󰄉 " : "󰔛 ") : (root.activeMode === "pomodoro" ? "󰔟 " : "󱎫 ")) + root.formattedTime() + " · " + root.activeTag
+        text: (root.isRunning ? (root.activeMode === "pomodoro" ? "󰄉 " : "󰔛 ") : (root.activeMode === "pomodoro" ? "󰔟 " : "󱎫 ")) + root.formattedTime() + " · 🏷️ " + root.activeTag
         tooltipText: "Study Tracker (" + (root.activeMode === "pomodoro" ? (root.pomodoroPhase === "work" ? "Pomodoro" : "Pause") : "Stoppuhr") + ") — Klick: Panel öffnen, Rechtsklick: " + (root.isRunning ? "Pause" : "Start")
         onPressed: function(buttonCode) {
             if (buttonCode === Qt.LeftButton) root.toggle()
