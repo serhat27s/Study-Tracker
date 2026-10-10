@@ -1,4 +1,4 @@
-// Model.js - Core data calculations and formatting for Study Tracker
+// Model.js - Kernlogik für Study Tracker (Pomodoro, Stoppuhr, Tag-Statistiken, Heatmap & Uptime)
 
 function padZero(n) {
     return n < 10 ? "0" + n : "" + n;
@@ -21,21 +21,39 @@ function formatSeconds(total) {
 }
 
 function formatDurationHuman(total) {
-    if (!total || total <= 0) return "0m";
+    if (!total || total <= 0) return "0 Min.";
     var hrs = Math.floor(total / 3600);
     var mins = Math.floor((total % 3600) / 60);
     var secs = total % 60;
     if (hrs > 0) {
-        return mins > 0 ? (hrs + "h " + mins + "m") : (hrs + "h");
+        return mins > 0 ? (hrs + " Std. " + mins + " Min.") : (hrs + " Std.");
     }
     if (mins > 0) {
-        return mins + "m";
+        return mins + " Min.";
     }
-    return secs + "s";
+    return secs + " Sek.";
 }
 
-var MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-var DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+function formatHoursDecimal(total) {
+    if (!total || total <= 0) return "0.0 Std.";
+    var h = (total / 3600).toFixed(1);
+    return h + " Std.";
+}
+
+function formatUptime(totalSec) {
+    if (!totalSec || totalSec <= 0) return "0 Min.";
+    var days = Math.floor(totalSec / 86400);
+    var hrs = Math.floor((totalSec % 86400) / 3600);
+    var mins = Math.floor((totalSec % 3600) / 60);
+    var parts = [];
+    if (days > 0) parts.push(days + (days === 1 ? " Tag" : " Tage"));
+    if (hrs > 0) parts.push(hrs + (hrs === 1 ? " Std." : " Std."));
+    if (mins > 0 || parts.length === 0) parts.push(mins + " Min.");
+    return parts.join(", ");
+}
+
+var MONAT_NAMEN = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
+var TAGE_NAMEN = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 
 function formatDateReadable(keyStr) {
     if (!keyStr) return "";
@@ -43,9 +61,62 @@ function formatDateReadable(keyStr) {
     if (parts.length !== 3) return keyStr;
     var d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
     var dayIdx = (d.getDay() + 6) % 7;
-    return DAY_NAMES[dayIdx] + ", " + MONTH_NAMES[d.getMonth()] + " " + d.getDate();
+    return TAGE_NAMEN[dayIdx] + ", " + d.getDate() + ". " + MONAT_NAMEN[d.getMonth()];
 }
 
+// -----------------------------------------------------------------------------
+// Tag-Stunden-Auswertung ("Wie viele Stunden für welches Fach/Tag")
+// -----------------------------------------------------------------------------
+function aggregateTagStats(history, scope) {
+    var historyList = Array.isArray(history) ? history : [];
+    var tagMap = {};
+    var todayDk = dateKey(new Date());
+
+    var grandTotalSeconds = 0;
+    for (var i = 0; i < historyList.length; i++) {
+        var sess = historyList[i];
+        if (!sess || !sess.duration) continue;
+        if (scope === "today") {
+            var dk = dateKey(new Date(sess.timestamp));
+            if (dk !== todayDk) continue;
+        }
+        var tag = sess.tag || "Allgemein";
+        if (!tagMap[tag]) {
+            tagMap[tag] = { tag: tag, totalSeconds: 0, sessionCount: 0 };
+        }
+        tagMap[tag].totalSeconds += sess.duration;
+        tagMap[tag].sessionCount += 1;
+        grandTotalSeconds += sess.duration;
+    }
+
+    var list = [];
+    var maxSeconds = 0;
+    for (var t in tagMap) {
+        var item = tagMap[t];
+        if (item.totalSeconds > maxSeconds) maxSeconds = item.totalSeconds;
+        list.push(item);
+    }
+    list.sort(function(a, b) { return b.totalSeconds - a.totalSeconds; });
+
+    for (var j = 0; j < list.length; j++) {
+        var it = list[j];
+        it.formatted = formatDurationHuman(it.totalSeconds);
+        it.hoursDec = formatHoursDecimal(it.totalSeconds);
+        it.percent = grandTotalSeconds > 0 ? Math.round((it.totalSeconds / grandTotalSeconds) * 100) : 0;
+        it.ratio = maxSeconds > 0 ? (it.totalSeconds / maxSeconds) : 0;
+    }
+
+    return {
+        tags: list,
+        grandTotalSeconds: grandTotalSeconds,
+        grandTotalFormatted: formatDurationHuman(grandTotalSeconds),
+        grandTotalHours: formatHoursDecimal(grandTotalSeconds)
+    };
+}
+
+// -----------------------------------------------------------------------------
+// 7-Zeilen GitHub Aktivitätsgraph (Montag bis Sonntag)
+// -----------------------------------------------------------------------------
 function buildHeatmap(history, numWeeks) {
     if (!numWeeks || numWeeks < 1) numWeeks = 14;
     var historyList = Array.isArray(history) ? history : [];
@@ -59,13 +130,13 @@ function buildHeatmap(history, numWeeks) {
             dayMap[dk] = { totalSeconds: 0, tags: {} };
         }
         dayMap[dk].totalSeconds += sess.duration;
-        var tag = sess.tag || "General";
+        var tag = sess.tag || "Allgemein";
         dayMap[dk].tags[tag] = (dayMap[dk].tags[tag] || 0) + sess.duration;
     }
 
     var today = new Date();
     var todayDk = dateKey(today);
-    // Monday = 0, Sunday = 6
+    // Montag = 0, Sonntag = 6
     var todayDayOfWeek = (today.getDay() + 6) % 7;
 
     var currentMon = new Date(today.getFullYear(), today.getMonth(), today.getDate() - todayDayOfWeek);
@@ -112,7 +183,8 @@ function buildHeatmap(history, numWeeks) {
                 isFuture: isFuture,
                 totalSeconds: sec,
                 totalMinutes: mins,
-                focusTimeStr: sec > 0 ? formatDurationHuman(sec) : "0m",
+                focusTimeStr: sec > 0 ? formatDurationHuman(sec) : "0 Min.",
+                hoursDec: formatHoursDecimal(sec),
                 level: level,
                 dominantTags: dominantTagsStr
             });
@@ -143,11 +215,18 @@ function buildHeatmap(history, numWeeks) {
         weeks: weeks,
         totalSeconds: totalSecondsLogged,
         todaySeconds: todaySeconds,
+        todayFormatted: formatDurationHuman(todaySeconds),
+        todayHours: formatHoursDecimal(todaySeconds),
+        totalFormatted: formatDurationHuman(totalSecondsLogged),
+        totalHours: formatHoursDecimal(totalSecondsLogged),
         streakDays: streak,
         sessionCount: historyList.length
     };
 }
 
+// -----------------------------------------------------------------------------
+// Programm-Nutzung (Stunden pro App)
+// -----------------------------------------------------------------------------
 function aggregateAppUsage(history, currentAppUsage, scope, selectedTag) {
     var historyList = Array.isArray(history) ? history : [];
     var appTotals = {};
@@ -201,6 +280,7 @@ function aggregateAppUsage(history, currentAppUsage, scope, selectedTag) {
     for (var j = 0; j < appList.length; j++) {
         var it = appList[j];
         it.formatted = formatDurationHuman(it.seconds);
+        it.hoursDec = formatHoursDecimal(it.seconds);
         it.percent = grandTotal > 0 ? Math.round((it.seconds / grandTotal) * 100) : 0;
         it.ratio = maxSec > 0 ? (it.seconds / maxSec) : 0;
     }
@@ -208,15 +288,19 @@ function aggregateAppUsage(history, currentAppUsage, scope, selectedTag) {
     return {
         apps: appList,
         totalSeconds: grandTotal,
-        totalFormatted: formatDurationHuman(grandTotal)
+        totalFormatted: formatDurationHuman(grandTotal),
+        totalHours: formatHoursDecimal(grandTotal)
     };
 }
 
+// -----------------------------------------------------------------------------
+// Realistische Beispieldaten auf Deutsch
+// -----------------------------------------------------------------------------
 function defaultSampleHistory() {
     var now = new Date();
     var list = [];
-    var tags = ["Coding", "Math", "Reading", "Research", "General"];
-    var apps = ["antigravity", "firefox", "terminal", "code", "obsidian"];
+    var tags = ["Mathe", "Programmieren", "Physik", "Lesen", "Recherche"];
+    var apps = ["antigravity", "firefox", "alacritty", "code", "obsidian"];
 
     for (var d = 13; d >= 0; d--) {
         if (d % 4 === 1 && d !== 1) continue;
@@ -224,7 +308,7 @@ function defaultSampleHistory() {
         for (var c = 0; c < count; c++) {
             var sessDate = new Date(now.getTime() - d * 86400000 - (c * 2 + 1) * 3600000);
             var tag = tags[(d + c) % tags.length];
-            var dur = ((d % 2 === 0 ? 25 : 45) + c * 15) * 60;
+            var dur = ((d % 2 === 0 ? 30 : 50) + c * 20) * 60;
             var app1 = apps[(d) % apps.length];
             var app2 = apps[(d + 1) % apps.length];
             var appMap = {};
