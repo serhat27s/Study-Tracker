@@ -52,6 +52,30 @@ function formatUptime(totalSec) {
     return parts.join(", ");
 }
 
+var TAG_COLORS = [
+    "#e84393", // Pink
+    "#4cd137", // Green
+    "#00a8ff", // Blue
+    "#c56cf0", // Lavender
+    "#fdcb6e", // Yellow
+    "#ff6b6b", // Red
+    "#10ac84", // Teal
+    "#575fcf"  // Indigo
+];
+
+function tagColor(tagName, index) {
+    if (typeof index === "number" && index >= 0) {
+        return TAG_COLORS[index % TAG_COLORS.length];
+    }
+    var hash = 0;
+    var str = String(tagName || "");
+    for (var i = 0; i < str.length; i++) {
+        hash = ((hash << 5) - hash) + str.charCodeAt(i);
+        hash |= 0;
+    }
+    return TAG_COLORS[Math.abs(hash) % TAG_COLORS.length];
+}
+
 var MONAT_NAMEN = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
 var TAGE_NAMEN = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 

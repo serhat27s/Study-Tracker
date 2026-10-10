@@ -64,7 +64,7 @@ Panel {
         open: root.opened
         focusTarget: keyCatcher
         contentWidth: panel.fittedContentWidth(Style.space(560))
-        contentHeight: panel.fittedContentHeight(contentCol.implicitHeight, Style.space(840))
+        contentHeight: panel.fittedContentHeight(contentCol.implicitHeight, Style.space(860))
 
         PanelKeyCatcher {
             id: keyCatcher
@@ -174,23 +174,17 @@ Panel {
                                 Rectangle {
                                     id: tagPill
                                     anchors.verticalCenter: parent.verticalCenter
-                                    height: Style.space(34)
-                                    width: tagPillRow.implicitWidth + Style.space(20)
-                                    radius: Style.space(17)
-                                    color: root.tagMenuOpen
-                                        ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.28)
-                                        : (tagPillMouse.containsMouse
-                                            ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.18)
-                                            : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.08))
-                                    border.width: 1.5
-                                    border.color: root.tagMenuOpen
-                                        ? Color.accent
-                                        : (tagPillMouse.containsMouse ? Color.accent : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.22))
+                                    height: Style.space(36)
+                                    width: tagPillRow.implicitWidth + Style.space(24)
+                                    radius: Style.space(18)
+                                    color: Color.accent
+                                    border.width: 1
+                                    border.color: Qt.lighter(Color.accent, 1.25)
 
                                     Row {
                                         id: tagPillRow
                                         anchors.centerIn: parent
-                                        spacing: Style.space(6)
+                                        spacing: Style.space(8)
 
                                         Text {
                                             text: "🏷️"
@@ -203,7 +197,7 @@ Panel {
                                             font.family: Style.font.family
                                             font.pixelSize: Style.font.body
                                             font.bold: true
-                                            color: Color.accent
+                                            color: "#ffffff"
                                             anchors.verticalCenter: parent.verticalCenter
                                         }
 
@@ -211,7 +205,8 @@ Panel {
                                             text: root.tagMenuOpen ? "󰅃" : "󰅀"
                                             font.family: Style.font.family
                                             font.pixelSize: Style.font.caption
-                                            color: Color.accent
+                                            font.bold: true
+                                            color: "#ffffff"
                                             anchors.verticalCenter: parent.verticalCenter
                                         }
                                     }
@@ -225,7 +220,7 @@ Panel {
                                             root.tagMenuOpen = !root.tagMenuOpen
                                             if (root.tagMenuOpen) {
                                                 Qt.callLater(function() {
-                                                    tagSearchField.forceActiveFocus()
+                                                    newTagInput.forceActiveFocus()
                                                 })
                                             }
                                         }
@@ -250,104 +245,206 @@ Panel {
                             }
 
                             // -------------------------------------------------
-                            // KOMPAKTES AUSKLAPP-MENÜ (Eingabe + Pills untereinander)
+                            // FOCUS TAGS DROPDOWN CARD (Genau wie im Screenshot)
                             // -------------------------------------------------
                             Rectangle {
-                                id: tagDropdown
+                                id: focusTagsCard
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                width: Style.space(260)
+                                width: Style.space(280)
                                 visible: root.tagMenuOpen
-                                implicitHeight: tagDropCol.implicitHeight + Style.space(16)
-                                radius: Style.space(10)
-                                color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.06)
+                                implicitHeight: focusTagsCol.implicitHeight + Style.space(24)
+                                radius: Style.space(14)
+                                color: Color.popups.background
                                 border.width: 1.5
                                 border.color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.45)
                                 clip: true
 
                                 Column {
-                                    id: tagDropCol
+                                    id: focusTagsCol
                                     anchors.left: parent.left
                                     anchors.right: parent.right
                                     anchors.top: parent.top
-                                    anchors.margins: Style.space(8)
-                                    spacing: Style.space(6)
+                                    anchors.margins: Style.space(12)
+                                    spacing: Style.space(8)
 
-                                    // Eingabefeld ("fängt einfach an zu tippen")
-                                    TextField {
-                                        id: tagSearchField
-                                        width: parent.width
-                                        placeholderText: "Neues Tag tippen... [Enter]"
-                                        font.pixelSize: Style.font.bodySmall
-                                        horizontalPadding: Style.space(10)
-                                        verticalPadding: Style.space(6)
-                                        onAccepted: {
-                                            if (root.rootWidget && text.trim().length > 0) {
-                                                root.rootWidget.addTag(text.trim())
-                                                text = ""
-                                                root.tagMenuOpen = false
-                                            }
-                                        }
+                                    // Header: "FOCUS TAGS"
+                                    Text {
+                                        text: "FOCUS TAGS"
+                                        font.family: Style.font.family
+                                        font.pixelSize: Style.font.caption * 0.9
+                                        font.bold: true
+                                        color: Qt.lighter(Color.accent, 1.25)
                                     }
 
-                                    // Vorhandene Tags untereinander in Pill-Form
+                                    // Tags-Liste untereinander
                                     Column {
                                         width: parent.width
-                                        spacing: Style.space(4)
+                                        spacing: Style.space(5)
 
                                         Repeater {
-                                            model: {
-                                                var all = root.rootWidget ? root.rootWidget.recentTags : []
-                                                var q = tagSearchField.text.trim().toLowerCase()
-                                                if (q.length === 0) return all
-                                                return all.filter(function(t) { return t.toLowerCase().indexOf(q) !== -1 })
-                                            }
+                                            model: root.rootWidget ? root.rootWidget.recentTags : []
 
                                             Rectangle {
+                                                id: tagRow
                                                 width: parent.width
-                                                height: Style.space(28)
-                                                radius: Style.space(14)
-                                                color: (root.rootWidget && root.rootWidget.activeTag === modelData)
-                                                    ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.28)
-                                                    : (pillMouse.containsMouse
-                                                        ? Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.12)
-                                                        : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.04))
-                                                border.width: 1
-                                                border.color: (root.rootWidget && root.rootWidget.activeTag === modelData)
+                                                height: Style.space(34)
+                                                radius: Style.space(10)
+                                                color: isSelected
                                                     ? Color.accent
-                                                    : (pillMouse.containsMouse ? Color.accent : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.15))
+                                                    : (tagRowMouse.containsMouse ? Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.1) : "transparent")
 
-                                                Row {
-                                                    anchors.verticalCenter: parent.verticalCenter
-                                                    anchors.left: parent.left
-                                                    anchors.leftMargin: Style.space(12)
+                                                readonly property bool isSelected: root.rootWidget && root.rootWidget.activeTag === modelData
+
+                                                RowLayout {
+                                                    anchors.fill: parent
+                                                    anchors.leftMargin: Style.space(10)
+                                                    anchors.rightMargin: Style.space(8)
                                                     spacing: Style.space(8)
 
-                                                    Text {
-                                                        text: "🏷️"
-                                                        font.pixelSize: Style.font.caption
-                                                        anchors.verticalCenter: parent.verticalCenter
+                                                    // Farbiger Punkt
+                                                    Rectangle {
+                                                        width: Style.space(12)
+                                                        height: Style.space(12)
+                                                        radius: Style.space(6)
+                                                        color: Model.tagColor(modelData, index)
+                                                        border.width: 1
+                                                        border.color: Qt.lighter(color, 1.2)
                                                     }
 
+                                                    // Tag-Name
                                                     Text {
                                                         text: modelData
                                                         font.family: Style.font.family
                                                         font.pixelSize: Style.font.bodySmall
-                                                        font.bold: root.rootWidget && root.rootWidget.activeTag === modelData
-                                                        color: (root.rootWidget && root.rootWidget.activeTag === modelData) ? Color.accent : root.fg
-                                                        anchors.verticalCenter: parent.verticalCenter
+                                                        font.bold: isSelected
+                                                        color: isSelected ? "#ffffff" : root.fg
+                                                    }
+
+                                                    // Häkchen bei ausgewähltem Tag
+                                                    Text {
+                                                        visible: isSelected
+                                                        text: "✓"
+                                                        font.family: Style.font.family
+                                                        font.pixelSize: Style.font.bodySmall
+                                                        font.bold: true
+                                                        color: "#ffffff"
+                                                    }
+
+                                                    Item { Layout.fillWidth: true }
+
+                                                    // Mülleimer-Icon zum Löschen
+                                                    Text {
+                                                        text: "🗑"
+                                                        font.pixelSize: Style.font.caption
+                                                        color: isSelected ? "#ffffff" : (trashMouse.containsMouse ? Color.urgent : root.dim)
+                                                        opacity: trashMouse.containsMouse ? 1.0 : (isSelected ? 0.9 : 0.6)
+
+                                                        MouseArea {
+                                                            id: trashMouse
+                                                            anchors.fill: parent
+                                                            anchors.margins: -Style.space(4)
+                                                            hoverEnabled: true
+                                                            cursorShape: Qt.PointingHandCursor
+                                                            onClicked: {
+                                                                if (root.rootWidget) {
+                                                                    root.rootWidget.removeTag(modelData)
+                                                                }
+                                                            }
+                                                        }
                                                     }
                                                 }
 
+                                                // Klick auf die Zeile (außer Mülleimer) wählt das Tag aus
                                                 MouseArea {
-                                                    id: pillMouse
+                                                    id: tagRowMouse
                                                     anchors.fill: parent
+                                                    anchors.rightMargin: Style.space(26)
                                                     hoverEnabled: true
                                                     cursorShape: Qt.PointingHandCursor
                                                     onClicked: {
                                                         if (root.rootWidget) {
                                                             root.rootWidget.activeTag = modelData
                                                         }
-                                                        tagSearchField.text = ""
+                                                        root.tagMenuOpen = false
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Trennlinie
+                                    Rectangle {
+                                        width: parent.width
+                                        height: 1
+                                        color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.12)
+                                    }
+
+                                    // Unteres Eingabefeld: [ Letters or numbers... ]  [ + ]
+                                    RowLayout {
+                                        width: parent.width
+                                        spacing: Style.space(6)
+
+                                        Rectangle {
+                                            Layout.fillWidth: true
+                                            height: Style.space(34)
+                                            radius: Style.space(8)
+                                            color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.06)
+                                            border.width: 1
+                                            border.color: newTagInput.activeFocus ? Color.accent : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.18)
+
+                                            TextInput {
+                                                id: newTagInput
+                                                anchors.fill: parent
+                                                anchors.leftMargin: Style.space(10)
+                                                anchors.rightMargin: Style.space(10)
+                                                verticalAlignment: TextInput.AlignVCenter
+                                                font.family: Style.font.family
+                                                font.pixelSize: Style.font.bodySmall
+                                                color: root.fg
+                                                clip: true
+
+                                                Text {
+                                                    anchors.fill: parent
+                                                    verticalAlignment: Text.AlignVCenter
+                                                    text: "Letters or numbers..."
+                                                    font.family: Style.font.family
+                                                    font.pixelSize: Style.font.bodySmall
+                                                    color: root.faint
+                                                    visible: !newTagInput.text && !newTagInput.activeFocus
+                                                }
+
+                                                onAccepted: {
+                                                    if (root.rootWidget && text.trim().length > 0) {
+                                                        root.rootWidget.addTag(text.trim())
+                                                        text = ""
+                                                        root.tagMenuOpen = false
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        // Lila Quadrat-Button mit [+]
+                                        Rectangle {
+                                            width: Style.space(34)
+                                            height: Style.space(34)
+                                            radius: Style.space(8)
+                                            color: Color.accent
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: "+"
+                                                font.pixelSize: Style.font.title
+                                                font.bold: true
+                                                color: "#ffffff"
+                                            }
+
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: {
+                                                    if (root.rootWidget && newTagInput.text.trim().length > 0) {
+                                                        root.rootWidget.addTag(newTagInput.text.trim())
+                                                        newTagInput.text = ""
                                                         root.tagMenuOpen = false
                                                     }
                                                 }
