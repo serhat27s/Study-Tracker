@@ -91,19 +91,28 @@ function formatDateReadable(keyStr) {
 // -----------------------------------------------------------------------------
 // Tag-Stunden-Auswertung ("Wie viele Stunden für welches Fach/Tag")
 // -----------------------------------------------------------------------------
+// Prüft, ob ein Zeitstempel in den Zeitraum fällt: "today" | "week" (letzte 7 Tage) | sonst alles
+function inScope(timestamp, scope) {
+    if (scope === "today") {
+        return dateKey(new Date(timestamp)) === dateKey(new Date());
+    }
+    if (scope === "week") {
+        var now = new Date();
+        var start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
+        return new Date(timestamp).getTime() >= start.getTime();
+    }
+    return true;
+}
+
 function aggregateTagStats(history, scope) {
     var historyList = Array.isArray(history) ? history : [];
     var tagMap = {};
-    var todayDk = dateKey(new Date());
 
     var grandTotalSeconds = 0;
     for (var i = 0; i < historyList.length; i++) {
         var sess = historyList[i];
         if (!sess || !sess.duration) continue;
-        if (scope === "today") {
-            var dk = dateKey(new Date(sess.timestamp));
-            if (dk !== todayDk) continue;
-        }
+        if (!inScope(sess.timestamp, scope)) continue;
         var tag = sess.tag || "Allgemein";
         if (!tagMap[tag]) {
             tagMap[tag] = { tag: tag, totalSeconds: 0, sessionCount: 0 };
@@ -275,10 +284,7 @@ function aggregateAppUsage(history, currentAppUsage, scope, selectedTag) {
             if (selectedTag && selectedTag !== "" && sess.tag !== selectedTag) {
                 continue;
             }
-            if (scope === "today") {
-                var dk = dateKey(new Date(sess.timestamp));
-                if (dk !== todayDk) continue;
-            }
+            if (!inScope(sess.timestamp, scope)) continue;
             addUsage(sess.app_usage);
         }
         if (!selectedTag || selectedTag === "") {

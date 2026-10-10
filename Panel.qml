@@ -2,7 +2,6 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import Quickshell
-import Quickshell.Io
 import qs.Commons
 import qs.Ui
 import "Model.js" as Model
@@ -15,34 +14,73 @@ Panel {
     property var anchorItem: null
     property var hostWidget: null
     property var rootWidget: null
-    property int currentTab: 0 // 0: Timer & Aktivität, 1: System & Programme
+
+    // 0: Fokus (Timer + Aktivität), 1: Statistik (Stunden pro Fach), 2: System (Uptime + Programme)
+    property int currentTab: 0
 
     property bool tagMenuOpen: false
-    property string tagStatsScope: "all" // "all" | "today"
-    property string appScope: "current"  // "current" | "today" | "all"
-    property string appTagFilter: ""     // "" = alle Tags
+    property real tagMenuX: 0
+    property real tagMenuY: 0
+
+    property string tagStatsScope: "week"   // "today" | "week" | "all"
+    property string appScope: "today"       // "current" | "today" | "week" | "all"
+    property string appTagFilter: ""        // "" = alle Fächer
     property var hoveredCell: null
 
-    readonly property color fg: root.barForeground
-    readonly property color dim: Qt.darker(fg, 1.55)
-    readonly property color faint: Qt.darker(fg, 2.2)
-    readonly property color accent: Color.accent
-    readonly property color urgent: Color.urgent
+    // Feste Panelgröße – ändert sich nie, egal welcher Tab / Zustand
+    readonly property int panelWidth: Style.space(400)
+    readonly property int panelInnerHeight: Style.space(548)
 
-    readonly property var tagStatsData: root.rootWidget
-        ? Model.aggregateTagStats(root.rootWidget.history, root.tagStatsScope)
+    readonly property color fg: root.barForeground
+    readonly property color dim: Qt.darker(fg, 1.5)
+    readonly property color faint: Qt.darker(fg, 2.2)
+    readonly property color surface: Qt.rgba(fg.r, fg.g, fg.b, 0.05)
+    readonly property color surfaceHover: Qt.rgba(fg.r, fg.g, fg.b, 0.09)
+    readonly property color hairline: Qt.rgba(fg.r, fg.g, fg.b, 0.10)
+
+    readonly property var w: root.rootWidget
+    readonly property bool running: w ? w.isRunning : false
+    readonly property bool isPomodoro: w ? w.activeMode === "pomodoro" : true
+    readonly property string activeTag: w ? w.activeTag : "Allgemein"
+
+    readonly property int phaseTotal: {
+        if (!w) return 1500
+        if (w.pomodoroPhase === "shortBreak") return w.pomodoroShortBreakDuration
+        if (w.pomodoroPhase === "longBreak") return w.pomodoroLongBreakDuration
+        return w.pomodoroWorkDuration
+    }
+    readonly property real timerProgress: {
+        if (!w) return 0
+        if (isPomodoro) return Math.max(0, Math.min(1, 1 - w.remainingSeconds / Math.max(1, phaseTotal)))
+        return (w.elapsedSeconds % 3600) / 3600
+    }
+
+    readonly property int heatmapWeeks: 17
+
+    readonly property var heatmapData: w
+        ? Model.buildHeatmap(w.history, root.heatmapWeeks)
+        : { weeks: [], totalSeconds: 0, todaySeconds: 0, todayHours: "0.0 Std.", totalHours: "0.0 Std.", streakDays: 0, sessionCount: 0 }
+
+    readonly property var tagStatsData: w
+        ? Model.aggregateTagStats(w.history, root.tagStatsScope)
         : { tags: [], grandTotalSeconds: 0, grandTotalFormatted: "0 Min.", grandTotalHours: "0.0 Std." }
 
-    readonly property var heatmapData: root.rootWidget
-        ? Model.buildHeatmap(root.rootWidget.history, 14)
-        : { weeks: [], totalSeconds: 0, todaySeconds: 0, streakDays: 0, sessionCount: 0 }
+    readonly property var weekStats: w
+        ? Model.aggregateTagStats(w.history, "week")
+        : { grandTotalHours: "0.0 Std." }
 
-    readonly property var appUsageData: root.rootWidget
-        ? Model.aggregateAppUsage(root.rootWidget.history, root.rootWidget.currentAppUsage, root.appScope, root.appTagFilter)
+    readonly property var appUsageData: w
+        ? Model.aggregateAppUsage(w.history, w.currentAppUsage, root.appScope, root.appTagFilter)
         : { apps: [], totalSeconds: 0, totalFormatted: "0 Min.", totalHours: "0.0 Std." }
 
+    function colorForTag(name) {
+        var tags = w ? w.recentTags : []
+        var idx = tags.indexOf(name)
+        return Model.tagColor(name, idx)
+    }
+
     function open() {
-        if (root.rootWidget) root.rootWidget.refreshUptime()
+        if (w) w.refreshUptime()
         root.controller.show()
     }
     function close() {
@@ -56,6 +94,155 @@ Panel {
         return false
     }
 
+    function setTab(i) {
+        root.closeTagMenu()
+        if (i === 2 && w) w.refreshUptime()
+        root.currentTab = i
+    }
+
+    function openTagMenu() {
+        if (root.currentTab !== 0) {
+            root.currentTab = 0
+            Qt.callLater(root.openTagMenu)
+            return
+        }
+        var p = tagPill.mapToItem(keyCatcher, 0, 0)
+        var menuW = tagMenu.width
+        root.tagMenuX = Math.max(0, Math.min(keyCatcher.width - menuW, p.x + tagPill.width / 2 - menuW / 2))
+        root.tagMenuY = p.y + tagPill.height + Style.space(6)
+        root.tagMenuOpen = true
+        Qt.callLater(function() { tagInput.forceActiveFocus() })
+    }
+
+    function closeTagMenu() {
+        if (!root.tagMenuOpen) return
+        root.tagMenuOpen = false
+        tagInput.text = ""
+        keyCatcher.forceActiveFocus()
+    }
+
+    function submitNewTag() {
+        var t = tagInput.text.trim()
+        if (w && t.length > 0) w.addTag(t)
+        root.closeTagMenu()
+    }
+
+    // =========================================================================
+    // Wiederverwendbare Bausteine
+    // =========================================================================
+
+    // Segment-Umschalter mit gleich breiten Segmenten (läuft nie über)
+    component Segmented: Rectangle {
+        id: seg
+        property var options: []        // [{ value, label, icon? }]
+        property string value: ""
+        property color fg: Color.foreground
+        property real fontSize: Style.font.caption
+        signal picked(string value)
+
+        implicitHeight: Style.space(28)
+        radius: Style.space(8)
+        color: Qt.rgba(fg.r, fg.g, fg.b, 0.06)
+
+        Row {
+            anchors.fill: parent
+            anchors.margins: Style.space(2)
+
+            Repeater {
+                model: seg.options
+
+                Rectangle {
+                    readonly property bool sel: modelData.value === seg.value
+                    width: (seg.width - Style.space(4)) / Math.max(1, seg.options.length)
+                    height: parent.height
+                    radius: Style.space(6)
+                    color: sel
+                        ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.20)
+                        : (segMouse.containsMouse ? Qt.rgba(seg.fg.r, seg.fg.g, seg.fg.b, 0.06) : "transparent")
+                    border.width: sel ? 1 : 0
+                    border.color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.55)
+
+                    Behavior on color { ColorAnimation { duration: 120 } }
+
+                    Text {
+                        anchors.centerIn: parent
+                        width: parent.width - Style.space(8)
+                        horizontalAlignment: Text.AlignHCenter
+                        elide: Text.ElideRight
+                        text: (modelData.icon ? modelData.icon + "  " : "") + modelData.label
+                        font.family: Style.font.family
+                        font.pixelSize: seg.fontSize
+                        font.bold: parent.sel
+                        color: parent.sel ? Color.accent : Qt.darker(seg.fg, 1.35)
+                    }
+
+                    MouseArea {
+                        id: segMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: seg.picked(modelData.value)
+                    }
+                }
+            }
+        }
+    }
+
+    // Kleine Kennzahl-Kachel
+    component StatTile: Rectangle {
+        id: tile
+        property string label: ""
+        property string value: ""
+        property color fg: Color.foreground
+        property color valueColor: fg
+
+        implicitHeight: Style.space(50)
+        radius: Style.space(8)
+        color: Qt.rgba(fg.r, fg.g, fg.b, 0.05)
+
+        Column {
+            anchors.centerIn: parent
+            width: parent.width - Style.space(8)
+            spacing: Style.space(2)
+
+            Text {
+                width: parent.width
+                horizontalAlignment: Text.AlignHCenter
+                elide: Text.ElideRight
+                text: tile.label
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption * 0.85
+                font.bold: true
+                color: Qt.darker(tile.fg, 1.5)
+            }
+            Text {
+                width: parent.width
+                horizontalAlignment: Text.AlignHCenter
+                elide: Text.ElideRight
+                text: tile.value
+                font.family: Style.font.family
+                font.pixelSize: Style.font.subtitle
+                font.bold: true
+                color: tile.valueColor
+            }
+        }
+    }
+
+    // Abschnittsüberschrift
+    component SectionLabel: Text {
+        property color fg: Color.foreground
+        textFormat: Text.PlainText
+        elide: Text.ElideRight
+        font.family: Style.font.family
+        font.pixelSize: Style.font.caption
+        font.bold: true
+        font.letterSpacing: 0.6
+        color: Qt.darker(fg, 1.5)
+    }
+
+    // =========================================================================
+    // Panel
+    // =========================================================================
     KeyboardPanel {
         id: panel
         anchorItem: root.anchorItem
@@ -63,846 +250,705 @@ Panel {
         bar: root.bar
         open: root.opened
         focusTarget: keyCatcher
-        contentWidth: panel.fittedContentWidth(Style.space(420))
-        contentHeight: panel.fittedContentHeight(contentCol.implicitHeight, Style.space(800))
+        contentWidth: panel.fittedContentWidth(root.panelWidth)
+        contentHeight: panel.fittedContentHeight(root.panelInnerHeight)
 
         PanelKeyCatcher {
             id: keyCatcher
             anchors.fill: parent
-            onCloseRequested: {
-                if (root.tagMenuOpen) {
-                    root.tagMenuOpen = false
-                } else {
-                    root.close()
-                }
-            }
+            blocked: root.tagMenuOpen
+
+            onCloseRequested: root.close()
             onTabRequested: function(direction) { root.switchPanel(direction) }
+            onActivateRequested: if (root.w) root.w.toggleRunning()
+            onMoveRequested: function(dx, dy) {
+                if (dx !== 0) root.setTab((root.currentTab + dx + 3) % 3)
+            }
+            onTextKey: function(t) {
+                if (t === "1") root.setTab(0)
+                else if (t === "2") root.setTab(1)
+                else if (t === "3") root.setTab(2)
+                else if (t === "r" && root.w) root.w.resetTimer()
+                else if (t === "s" && root.w) root.w.finishAndSave()
+                else if (t === "m" && root.w) root.w.setMode(root.isPomodoro ? "tracker" : "pomodoro")
+                else if (t === "t") root.openTagMenu()
+            }
 
-            Flickable {
-                id: panelFlick
+            ColumnLayout {
                 anchors.fill: parent
-                contentWidth: width
-                contentHeight: contentCol.implicitHeight
-                clip: true
-                boundsBehavior: Flickable.StopAtBounds
-                flickableDirection: Flickable.VerticalFlick
-                interactive: contentHeight > height
+                spacing: Style.space(12)
 
-                Column {
-                    id: contentCol
-                    width: panelFlick.width
-                    spacing: Style.space(12)
-                    topPadding: Style.space(14)
-                    bottomPadding: Style.space(18)
-                    leftPadding: Style.space(14)
-                    rightPadding: Style.space(14)
+                // -------------------------------------------------------------
+                // Tab-Leiste
+                // -------------------------------------------------------------
+                Segmented {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Style.space(30)
+                    fg: root.fg
+                    fontSize: Style.font.bodySmall
+                    value: "" + root.currentTab
+                    options: [
+                        { value: "0", label: "Fokus", icon: "󰔛" },
+                        { value: "1", label: "Statistik", icon: "󰄨" },
+                        { value: "2", label: "System", icon: "󰍹" }
+                    ]
+                    onPicked: function(v) { root.setTab(parseInt(v)) }
+                }
 
-                    // ---------------------------------------------------------
-                    // Header & Tab-Navigation (Slide 1 vs Slide 2)
-                    // ---------------------------------------------------------
-                    RowLayout {
-                        width: parent.width
-
-                        Text {
-                            text: "󰔛 Study Tracker"
-                            font.family: Style.font.family
-                            font.pixelSize: Style.font.title
-                            font.bold: true
-                            color: root.fg
-                        }
-
-                        Item { Layout.fillWidth: true }
-
-                        Row {
-                            spacing: Style.space(4)
-
-                            Button {
-                                text: "Timer & Aktivität"
-                                selected: root.currentTab === 0
-                                bordered: true
-                                fontSize: Style.font.caption
-                                onClicked: root.currentTab = 0
-                            }
-
-                            Button {
-                                text: "System & Apps"
-                                selected: root.currentTab === 1
-                                bordered: true
-                                fontSize: Style.font.caption
-                                onClicked: {
-                                    if (root.rootWidget) root.rootWidget.refreshUptime()
-                                    root.currentTab = 1
-                                }
-                            }
-                        }
-                    }
-
-                    PanelSeparator {
-                        foreground: root.fg
-                    }
+                StackLayout {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    currentIndex: root.currentTab
 
                     // =========================================================
-                    // SLIDE 1: Timer & Tag GANZ WEIT OBEN, dann Steuerung & Heatmap
+                    // TAB 1: FOKUS
                     // =========================================================
-                    Column {
-                        width: parent.width
-                        spacing: Style.space(12)
-                        visible: root.currentTab === 0
+                    Flickable {
+                        id: focusFlick
+                        clip: true
+                        contentWidth: width
+                        contentHeight: focusCol.implicitHeight
+                        boundsBehavior: Flickable.StopAtBounds
+                        interactive: contentHeight > height
 
-                        // -----------------------------------------------------
-                        // 1. GANZ WEIT OBEN: Timer-Minuten + Tag daneben
-                        // -----------------------------------------------------
                         Column {
-                            width: parent.width
-                            spacing: Style.space(6)
+                            id: focusCol
+                            width: focusFlick.width
+                            spacing: Style.space(14)
 
-                            // Zentrierte Zeile: [ 25:00 ]   [ 🏷️ Mathe ▾ ]
-                            Row {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                spacing: Style.space(12)
-
-                                Text {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: root.rootWidget ? root.rootWidget.formattedTime() : "00:00"
-                                    color: root.rootWidget && root.rootWidget.isRunning ? Color.accent : root.fg
-                                    font.family: Style.font.family
-                                    font.pixelSize: Style.font.displayLarge * 1.45
-                                    font.bold: true
-                                }
-
-                                // Klickbares Tag-Pill
-                                Rectangle {
-                                    id: tagPill
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    height: Style.space(32)
-                                    width: tagPillRow.implicitWidth + Style.space(20)
-                                    radius: Style.space(16)
-                                    color: Color.accent
-                                    border.width: 1
-                                    border.color: Qt.lighter(Color.accent, 1.25)
-
-                                    Row {
-                                        id: tagPillRow
-                                        anchors.centerIn: parent
-                                        spacing: Style.space(6)
-
-                                        Text {
-                                            text: "🏷️"
-                                            font.pixelSize: Style.font.caption
-                                            anchors.verticalCenter: parent.verticalCenter
-                                        }
-
-                                        Text {
-                                            text: root.rootWidget ? root.rootWidget.activeTag : "Mathe"
-                                            font.family: Style.font.family
-                                            font.pixelSize: Style.font.bodySmall
-                                            font.bold: true
-                                            color: "#ffffff"
-                                            anchors.verticalCenter: parent.verticalCenter
-                                        }
-
-                                        Text {
-                                            text: root.tagMenuOpen ? "󰅃" : "󰅀"
-                                            font.family: Style.font.family
-                                            font.pixelSize: Style.font.caption * 0.9
-                                            font.bold: true
-                                            color: "#ffffff"
-                                            anchors.verticalCenter: parent.verticalCenter
-                                        }
-                                    }
-
-                                    MouseArea {
-                                        id: tagPillMouse
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: {
-                                            root.tagMenuOpen = !root.tagMenuOpen
-                                            if (root.tagMenuOpen) {
-                                                Qt.callLater(function() {
-                                                    newTagInput.forceActiveFocus()
-                                                })
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Status-Text
-                            Text {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                text: {
-                                    if (!root.rootWidget) return ""
-                                    if (!root.rootWidget.isRunning) return "Lerneinheit pausiert"
-                                    if (root.rootWidget.activeMode === "pomodoro") {
-                                        return (root.rootWidget.pomodoroPhase === "work" ? "Fokus auf: " : "Pause: ") + root.rootWidget.activeTag
-                                    }
-                                    return "Stoppuhr aktiv für: " + root.rootWidget.activeTag
-                                }
-                                color: root.rootWidget && root.rootWidget.isRunning ? root.fg : root.dim
-                                font.family: Style.font.family
-                                font.pixelSize: Style.font.caption
-                            }
-
-                            // -------------------------------------------------
-                            // FOCUS TAGS DROPDOWN CARD (Genau wie im Screenshot)
-                            // -------------------------------------------------
+                            // ---------------- Timer-Karte ----------------
                             Rectangle {
-                                id: focusTagsCard
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                width: Math.min(parent.width - Style.space(16), Style.space(260))
-                                visible: root.tagMenuOpen
-                                implicitHeight: focusTagsCol.implicitHeight + Style.space(20)
+                                width: parent.width
+                                implicitHeight: timerCol.implicitHeight + Style.space(28)
                                 radius: Style.space(12)
-                                color: Color.popups.background
-                                border.width: 1.5
-                                border.color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.45)
-                                clip: true
+                                color: root.surface
+                                border.width: 1
+                                border.color: root.running
+                                    ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.45)
+                                    : root.hairline
+
+                                Behavior on border.color { ColorAnimation { duration: 200 } }
 
                                 Column {
-                                    id: focusTagsCol
+                                    id: timerCol
+                                    anchors.top: parent.top
                                     anchors.left: parent.left
                                     anchors.right: parent.right
-                                    anchors.top: parent.top
-                                    anchors.margins: Style.space(10)
-                                    spacing: Style.space(7)
+                                    anchors.margins: Style.space(14)
+                                    spacing: Style.space(10)
 
-                                    // Header: "FOCUS TAGS"
-                                    Text {
-                                        text: "FOCUS TAGS"
-                                        font.family: Style.font.family
-                                        font.pixelSize: Style.font.caption * 0.85
-                                        font.bold: true
-                                        color: Qt.lighter(Color.accent, 1.25)
+                                    // Modus
+                                    Segmented {
+                                        width: parent.width
+                                        fg: root.fg
+                                        value: root.isPomodoro ? "pomodoro" : "tracker"
+                                        options: [
+                                            { value: "pomodoro", label: "Pomodoro", icon: "󰄉" },
+                                            { value: "tracker", label: "Stoppuhr", icon: "󱎫" }
+                                        ]
+                                        onPicked: function(v) { if (root.w) root.w.setMode(v) }
                                     }
 
-                                    // Tags-Liste untereinander
-                                    Column {
+                                    // Zeit + Tag rechts daneben
+                                    Item {
                                         width: parent.width
-                                        spacing: Style.space(4)
+                                        height: Style.space(58)
 
-                                        Repeater {
-                                            model: root.rootWidget ? root.rootWidget.recentTags : []
+                                        Row {
+                                            anchors.centerIn: parent
+                                            spacing: Style.space(14)
 
+                                            Text {
+                                                id: timeText
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                text: root.w ? root.w.formattedTime() : "25:00"
+                                                font.family: Style.font.family
+                                                font.pixelSize: Style.font.displayLarge * 1.6
+                                                font.bold: true
+                                                color: root.running ? Color.accent : root.fg
+                                                Behavior on color { ColorAnimation { duration: 200 } }
+                                            }
+
+                                            // Tag-Pill
                                             Rectangle {
-                                                id: tagRow
-                                                width: parent.width
-                                                height: Style.space(32)
-                                                radius: Style.space(8)
-                                                color: isSelected
-                                                    ? Color.accent
-                                                    : (tagRowMouse.containsMouse ? Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.1) : "transparent")
+                                                id: tagPill
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                readonly property color tagCol: root.colorForTag(root.activeTag)
+                                                height: Style.space(28)
+                                                width: tagPillRow.implicitWidth + Style.space(20)
+                                                radius: height / 2
+                                                color: tagPillMouse.containsMouse || root.tagMenuOpen
+                                                    ? Qt.rgba(tagCol.r, tagCol.g, tagCol.b, 0.28)
+                                                    : Qt.rgba(tagCol.r, tagCol.g, tagCol.b, 0.16)
+                                                border.width: 1
+                                                border.color: Qt.rgba(tagCol.r, tagCol.g, tagCol.b, 0.6)
 
-                                                readonly property bool isSelected: root.rootWidget && root.rootWidget.activeTag === modelData
-
-                                                RowLayout {
-                                                    anchors.fill: parent
-                                                    anchors.leftMargin: Style.space(8)
-                                                    anchors.rightMargin: Style.space(8)
+                                                Row {
+                                                    id: tagPillRow
+                                                    anchors.centerIn: parent
                                                     spacing: Style.space(6)
 
-                                                    // Farbiger Punkt
                                                     Rectangle {
-                                                        width: Style.space(10)
-                                                        height: Style.space(10)
-                                                        radius: Style.space(5)
-                                                        color: Model.tagColor(modelData, index)
-                                                        border.width: 1
-                                                        border.color: Qt.lighter(color, 1.2)
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                        width: Style.space(8)
+                                                        height: width
+                                                        radius: width / 2
+                                                        color: tagPill.tagCol
                                                     }
-
-                                                    // Tag-Name
                                                     Text {
-                                                        text: modelData
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                        width: Math.min(implicitWidth, Style.space(96))
+                                                        elide: Text.ElideRight
+                                                        text: root.activeTag
                                                         font.family: Style.font.family
-                                                        font.pixelSize: Style.font.caption
-                                                        font.bold: isSelected
-                                                        color: isSelected ? "#ffffff" : root.fg
-                                                    }
-
-                                                    // Häkchen bei ausgewähltem Tag
-                                                    Text {
-                                                        visible: isSelected
-                                                        text: "✓"
-                                                        font.family: Style.font.family
-                                                        font.pixelSize: Style.font.caption
+                                                        font.pixelSize: Style.font.bodySmall
                                                         font.bold: true
-                                                        color: "#ffffff"
+                                                        color: root.fg
                                                     }
-
-                                                    Item { Layout.fillWidth: true }
-
-                                                    // Mülleimer-Icon zum Löschen
                                                     Text {
-                                                        text: "🗑"
-                                                        font.pixelSize: Style.font.caption * 0.9
-                                                        color: isSelected ? "#ffffff" : (trashMouse.containsMouse ? Color.urgent : root.dim)
-                                                        opacity: trashMouse.containsMouse ? 1.0 : (isSelected ? 0.9 : 0.6)
-
-                                                        MouseArea {
-                                                            id: trashMouse
-                                                            anchors.fill: parent
-                                                            anchors.margins: -Style.space(4)
-                                                            hoverEnabled: true
-                                                            cursorShape: Qt.PointingHandCursor
-                                                            onClicked: {
-                                                                if (root.rootWidget) {
-                                                                    root.rootWidget.removeTag(modelData)
-                                                                }
-                                                            }
-                                                        }
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                        text: root.tagMenuOpen ? "󰅃" : "󰅀"
+                                                        font.family: Style.font.family
+                                                        font.pixelSize: Style.font.caption
+                                                        color: root.dim
                                                     }
                                                 }
 
                                                 MouseArea {
-                                                    id: tagRowMouse
+                                                    id: tagPillMouse
                                                     anchors.fill: parent
-                                                    anchors.rightMargin: Style.space(24)
                                                     hoverEnabled: true
                                                     cursorShape: Qt.PointingHandCursor
-                                                    onClicked: {
-                                                        if (root.rootWidget) {
-                                                            root.rootWidget.activeTag = modelData
-                                                        }
-                                                        root.tagMenuOpen = false
-                                                    }
+                                                    onClicked: root.tagMenuOpen ? root.closeTagMenu() : root.openTagMenu()
                                                 }
                                             }
                                         }
                                     }
 
-                                    // Trennlinie
-                                    Rectangle {
+                                    // Phase / Status
+                                    Item {
                                         width: parent.width
-                                        height: 1
-                                        color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.12)
-                                    }
+                                        height: Style.space(16)
 
-                                    // Unteres Eingabefeld: [ Letters or numbers... ]  [ + ]
-                                    RowLayout {
-                                        width: parent.width
-                                        spacing: Style.space(6)
+                                        Row {
+                                            anchors.centerIn: parent
+                                            spacing: Style.space(8)
 
-                                        Rectangle {
-                                            Layout.fillWidth: true
-                                            height: Style.space(32)
-                                            radius: Style.space(6)
-                                            color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.06)
-                                            border.width: 1
-                                            border.color: newTagInput.activeFocus ? Color.accent : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.18)
-
-                                            TextInput {
-                                                id: newTagInput
-                                                anchors.fill: parent
-                                                anchors.leftMargin: Style.space(8)
-                                                anchors.rightMargin: Style.space(8)
-                                                verticalAlignment: TextInput.AlignVCenter
+                                            Text {
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                text: {
+                                                    if (!root.w) return ""
+                                                    var state = root.running ? "" : " · pausiert"
+                                                    if (!root.isPomodoro) return "Stoppuhr" + (root.running ? " · läuft" : " · bereit")
+                                                    if (root.w.pomodoroPhase === "shortBreak") return "Kurze Pause" + state
+                                                    if (root.w.pomodoroPhase === "longBreak") return "Lange Pause" + state
+                                                    return "Fokus" + state
+                                                }
                                                 font.family: Style.font.family
                                                 font.pixelSize: Style.font.caption
-                                                color: root.fg
-                                                clip: true
+                                                color: root.dim
+                                            }
 
-                                                Text {
-                                                    anchors.fill: parent
-                                                    verticalAlignment: Text.AlignVCenter
-                                                    text: "Letters or numbers..."
-                                                    font.family: Style.font.family
-                                                    font.pixelSize: Style.font.caption
-                                                    color: root.faint
-                                                    visible: !newTagInput.text && !newTagInput.activeFocus
-                                                }
+                                            // Zyklus-Punkte (nur Pomodoro)
+                                            Row {
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                spacing: Style.space(4)
+                                                visible: root.isPomodoro
 
-                                                onAccepted: {
-                                                    if (root.rootWidget && text.trim().length > 0) {
-                                                        root.rootWidget.addTag(text.trim())
-                                                        text = ""
-                                                        root.tagMenuOpen = false
+                                                Repeater {
+                                                    model: 4
+                                                    Rectangle {
+                                                        readonly property int done: root.w ? root.w.pomodoroCyclesCompleted % 4 : 0
+                                                        width: Style.space(6)
+                                                        height: width
+                                                        radius: width / 2
+                                                        color: index < done ? Color.accent : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.18)
                                                     }
                                                 }
                                             }
                                         }
+                                    }
+
+                                    // Fortschrittsbalken
+                                    Rectangle {
+                                        width: parent.width
+                                        height: Style.space(4)
+                                        radius: height / 2
+                                        color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.08)
 
                                         Rectangle {
-                                            width: Style.space(32)
-                                            height: Style.space(32)
-                                            radius: Style.space(6)
+                                            width: parent.width * root.timerProgress
+                                            height: parent.height
+                                            radius: height / 2
                                             color: Color.accent
+                                            Behavior on width { NumberAnimation { duration: 300 } }
+                                        }
+                                    }
+
+                                    // Phasen-Auswahl (Pomodoro) bzw. Info-Zeile (Stoppuhr) – gleiche Höhe
+                                    Item {
+                                        width: parent.width
+                                        height: Style.space(26)
+
+                                        Segmented {
+                                            anchors.fill: parent
+                                            visible: root.isPomodoro
+                                            fg: root.fg
+                                            value: root.w ? root.w.pomodoroPhase : "work"
+                                            options: [
+                                                { value: "work", label: "Fokus 25" },
+                                                { value: "shortBreak", label: "Pause 5" },
+                                                { value: "longBreak", label: "Lang 15" }
+                                            ]
+                                            onPicked: function(v) { if (root.w) root.w.setPomodoroPhase(v) }
+                                        }
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            width: parent.width
+                                            visible: !root.isPomodoro
+                                            horizontalAlignment: Text.AlignHCenter
+                                            elide: Text.ElideRight
+                                            text: "Heute gelernt: " + root.heatmapData.todayHours
+                                            font.family: Style.font.family
+                                            font.pixelSize: Style.font.caption
+                                            color: root.dim
+                                        }
+                                    }
+
+                                    // Steuerung
+                                    RowLayout {
+                                        width: parent.width
+                                        spacing: Style.space(8)
+
+                                        // Primärer Start/Pause-Button
+                                        Rectangle {
+                                            Layout.fillWidth: true
+                                            Layout.preferredHeight: Style.space(34)
+                                            radius: Style.space(8)
+                                            color: root.running
+                                                ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, startMouse.containsMouse ? 0.30 : 0.20)
+                                                : (startMouse.containsMouse ? Qt.lighter(Color.accent, 1.12) : Color.accent)
+                                            border.width: root.running ? 1 : 0
+                                            border.color: Color.accent
 
                                             Text {
                                                 anchors.centerIn: parent
-                                                text: "+"
-                                                font.pixelSize: Style.font.heading
+                                                text: root.running ? "󰏤  Pause" : "󰐊  Start"
+                                                font.family: Style.font.family
+                                                font.pixelSize: Style.font.body
                                                 font.bold: true
-                                                color: "#ffffff"
+                                                color: root.running ? Color.accent : Color.popups.background
                                             }
 
                                             MouseArea {
+                                                id: startMouse
                                                 anchors.fill: parent
+                                                hoverEnabled: true
                                                 cursorShape: Qt.PointingHandCursor
-                                                onClicked: {
-                                                    if (root.rootWidget && newTagInput.text.trim().length > 0) {
-                                                        root.rootWidget.addTag(newTagInput.text.trim())
-                                                        newTagInput.text = ""
-                                                        root.tagMenuOpen = false
+                                                onClicked: if (root.w) root.w.toggleRunning()
+                                            }
+                                        }
+
+                                        // Sekundär-Aktionen
+                                        Repeater {
+                                            model: [
+                                                { icon: "󰆓", tip: "Session speichern (s)", action: "save" },
+                                                { icon: "󰑐", tip: "Zurücksetzen (r)", action: "reset" }
+                                            ]
+
+                                            Rectangle {
+                                                readonly property bool enabledAction: root.w && root.w.sessionDuration > 0
+                                                Layout.preferredWidth: Style.space(34)
+                                                Layout.preferredHeight: Style.space(34)
+                                                radius: Style.space(8)
+                                                color: actMouse.containsMouse && enabledAction ? root.surfaceHover : root.surface
+                                                border.width: 1
+                                                border.color: root.hairline
+                                                opacity: enabledAction ? 1 : 0.4
+
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: modelData.icon
+                                                    font.family: Style.font.family
+                                                    font.pixelSize: Style.font.icon
+                                                    color: root.fg
+                                                }
+
+                                                MouseArea {
+                                                    id: actMouse
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    enabled: parent.enabledAction
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: {
+                                                        if (!root.w) return
+                                                        if (modelData.action === "save") root.w.finishAndSave()
+                                                        else root.w.resetTimer()
                                                     }
+                                                }
+
+                                                PanelToolTip {
+                                                    visible: actMouse.containsMouse
+                                                    text: modelData.tip
                                                 }
                                             }
                                         }
                                     }
                                 }
                             }
-                        }
 
-                        // -----------------------------------------------------
-                        // 2. STEUERUNGS-BUTTONS (Start/Pause, Speichern, Zurücksetzen)
-                        // -----------------------------------------------------
-                        Row {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            spacing: Style.space(8)
-
-                            Button {
-                                text: root.rootWidget && root.rootWidget.isRunning ? "Pause" : "Start"
-                                iconText: root.rootWidget && root.rootWidget.isRunning ? "󰏤 " : "󰐊 "
-                                bordered: true
-                                selected: root.rootWidget && root.rootWidget.isRunning
-                                fontSize: Style.font.bodySmall
-                                onClicked: if (root.rootWidget) root.rootWidget.toggleRunning()
-                            }
-
-                            Button {
-                                text: "Speichern"
-                                iconText: "󰆓 "
-                                bordered: true
-                                fontSize: Style.font.bodySmall
-                                onClicked: if (root.rootWidget) root.rootWidget.finishAndSave()
-                            }
-
-                            Button {
-                                text: "Reset"
-                                iconText: "󰑐 "
-                                bordered: true
-                                fontSize: Style.font.bodySmall
-                                onClicked: if (root.rootWidget) root.rootWidget.resetTimer()
-                            }
-                        }
-
-                        // -----------------------------------------------------
-                        // 3. MODUS & PHASEN
-                        // -----------------------------------------------------
-                        RowLayout {
-                            width: parent.width
-
-                            Text {
-                                text: "MODUS"
-                                font.family: Style.font.family
-                                font.pixelSize: Style.font.caption
-                                font.bold: true
-                                color: root.dim
-                            }
-
-                            Item { Layout.fillWidth: true }
-
-                            Row {
-                                spacing: Style.space(4)
-
-                                Button {
-                                    text: "Pomodoro"
-                                    iconText: "󰄉 "
-                                    selected: root.rootWidget && root.rootWidget.activeMode === "pomodoro"
-                                    bordered: true
-                                    fontSize: Style.font.caption
-                                    onClicked: if (root.rootWidget) root.rootWidget.setMode("pomodoro")
-                                }
-
-                                Button {
-                                    text: "Stoppuhr"
-                                    iconText: "󱎫 "
-                                    selected: root.rootWidget && root.rootWidget.activeMode === "tracker"
-                                    bordered: true
-                                    fontSize: Style.font.caption
-                                    onClicked: if (root.rootWidget) root.rootWidget.setMode("tracker")
-                                }
-                            }
-                        }
-
-                        // Pomodoro-Phasen
-                        Column {
-                            width: parent.width
-                            spacing: Style.space(4)
-                            visible: root.rootWidget && root.rootWidget.activeMode === "pomodoro"
-
-                            RowLayout {
-                                width: parent.width
-
-                                Text {
-                                    text: "PHASE"
-                                    font.family: Style.font.family
-                                    font.pixelSize: Style.font.caption
-                                    font.bold: true
-                                    color: root.dim
-                                }
-
-                                Item { Layout.fillWidth: true }
-
-                                Text {
-                                    text: "Zyklus " + ((root.rootWidget ? (root.rootWidget.pomodoroCyclesCompleted % 4) : 0) + 1) + " von 4"
-                                    font.family: Style.font.family
-                                    font.pixelSize: Style.font.caption
-                                    color: root.dim
-                                }
-                            }
-
-                            Row {
-                                spacing: Style.space(4)
-
-                                Button {
-                                    text: "Fokus (25m)"
-                                    selected: root.rootWidget && root.rootWidget.pomodoroPhase === "work"
-                                    bordered: true
-                                    fontSize: Style.font.caption
-                                    onClicked: if (root.rootWidget) root.rootWidget.setPomodoroPhase("work")
-                                }
-
-                                Button {
-                                    text: "Pause (5m)"
-                                    selected: root.rootWidget && root.rootWidget.pomodoroPhase === "shortBreak"
-                                    bordered: true
-                                    fontSize: Style.font.caption
-                                    onClicked: if (root.rootWidget) root.rootWidget.setPomodoroPhase("shortBreak")
-                                }
-
-                                Button {
-                                    text: "Lang (15m)"
-                                    selected: root.rootWidget && root.rootWidget.pomodoroPhase === "longBreak"
-                                    bordered: true
-                                    fontSize: Style.font.caption
-                                    onClicked: if (root.rootWidget) root.rootWidget.setPomodoroPhase("longBreak")
-                                }
-                            }
-                        }
-
-                        PanelSeparator {
-                            foreground: root.fg
-                        }
-
-                        // -----------------------------------------------------
-                        // 4. STUNDEN-ÜBERSICHT NACH FACH / TAG
-                        // -----------------------------------------------------
-                        Column {
-                            width: parent.width
-                            spacing: Style.space(8)
-
-                            RowLayout {
-                                width: parent.width
-
-                                Text {
-                                    text: "GELERNT NACH FACH"
-                                    font.family: Style.font.family
-                                    font.pixelSize: Style.font.caption
-                                    font.bold: true
-                                    color: root.dim
-                                }
-
-                                Item { Layout.fillWidth: true }
-
-                                Row {
-                                    spacing: Style.space(4)
-
-                                    Button {
-                                        text: "Gesamt"
-                                        selected: root.tagStatsScope === "all"
-                                        bordered: true
-                                        fontSize: Style.font.caption * 0.9
-                                        onClicked: root.tagStatsScope = "all"
-                                    }
-
-                                    Button {
-                                        text: "Heute"
-                                        selected: root.tagStatsScope === "today"
-                                        bordered: true
-                                        fontSize: Style.font.caption * 0.9
-                                        onClicked: root.tagStatsScope = "today"
-                                    }
-                                }
-                            }
-
-                            // Rangliste der Fächer
+                            // ---------------- Aktivitätsgraph ----------------
                             Column {
+                                id: heatmapSection
                                 width: parent.width
-                                spacing: Style.space(8)
+                                spacing: Style.space(6)
 
-                                Repeater {
-                                    model: root.tagStatsData.tags
+                                readonly property real labelW: Style.space(18)
+                                readonly property real gap: Style.space(3)
+                                readonly property real cell: Math.max(6, Math.floor(
+                                    (width - labelW - gap - (root.heatmapWeeks - 1) * gap) / root.heatmapWeeks))
+
+                                RowLayout {
+                                    width: parent.width
+
+                                    SectionLabel {
+                                        Layout.fillWidth: true
+                                        fg: root.fg
+                                        text: "AKTIVITÄT"
+                                    }
+                                    Text {
+                                        text: "󰈸 " + root.heatmapData.streakDays + " Tage Streak"
+                                        font.family: Style.font.family
+                                        font.pixelSize: Style.font.caption
+                                        font.bold: true
+                                        color: root.heatmapData.streakDays > 0 ? Color.accent : root.dim
+                                    }
+                                }
+
+                                // Monatsbeschriftung
+                                Row {
+                                    x: heatmapSection.labelW + heatmapSection.gap
+                                    spacing: heatmapSection.gap
+
+                                    Repeater {
+                                        model: root.heatmapData.weeks
+
+                                        Item {
+                                            width: heatmapSection.cell
+                                            height: Style.space(12)
+
+                                            Text {
+                                                readonly property int month: parseInt(modelData[0].dateKey.split("-")[1], 10) - 1
+                                                readonly property bool firstOfMonth: index === 0
+                                                    || parseInt(root.heatmapData.weeks[index - 1][0].dateKey.split("-")[1], 10) - 1 !== month
+                                                visible: firstOfMonth && index < root.heatmapWeeks - 1
+                                                text: ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"][month]
+                                                font.family: Style.font.family
+                                                font.pixelSize: Style.font.caption * 0.8
+                                                color: root.faint
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Grid
+                                Row {
+                                    spacing: heatmapSection.gap
 
                                     Column {
-                                        width: parent.width
+                                        spacing: heatmapSection.gap
+                                        Repeater {
+                                            model: ["Mo", "", "Mi", "", "Fr", "", "So"]
+                                            Text {
+                                                width: heatmapSection.labelW
+                                                height: heatmapSection.cell
+                                                text: modelData
+                                                font.family: Style.font.family
+                                                font.pixelSize: Style.font.caption * 0.75
+                                                color: root.faint
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                        }
+                                    }
+
+                                    Repeater {
+                                        model: root.heatmapData.weeks
+
+                                        Column {
+                                            spacing: heatmapSection.gap
+
+                                            Repeater {
+                                                model: modelData
+
+                                                Rectangle {
+                                                    width: heatmapSection.cell
+                                                    height: heatmapSection.cell
+                                                    radius: Style.space(3)
+                                                    color: {
+                                                        if (modelData.isFuture) return "transparent"
+                                                        if (modelData.level === 4) return Color.accent
+                                                        if (modelData.level === 3) return Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.75)
+                                                        if (modelData.level === 2) return Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.50)
+                                                        if (modelData.level === 1) return Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.25)
+                                                        return Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.07)
+                                                    }
+                                                    border.width: (modelData.isToday || cellMouse.containsMouse) ? 1 : 0
+                                                    border.color: cellMouse.containsMouse ? root.fg : Color.accent
+
+                                                    MouseArea {
+                                                        id: cellMouse
+                                                        anchors.fill: parent
+                                                        hoverEnabled: !modelData.isFuture
+                                                        onEntered: root.hoveredCell = modelData
+                                                        onExited: if (root.hoveredCell === modelData) root.hoveredCell = null
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Info-Zeile + Legende (feste Höhe)
+                                RowLayout {
+                                    width: parent.width
+                                    height: Style.space(18)
+                                    spacing: Style.space(8)
+
+                                    Text {
+                                        Layout.fillWidth: true
+                                        elide: Text.ElideRight
+                                        text: {
+                                            var c = root.hoveredCell
+                                            if (c) {
+                                                var s = c.dateStr + " · " + c.focusTimeStr
+                                                if (c.dominantTags && c.dominantTags.length > 0) s += " · " + c.dominantTags
+                                                return s
+                                            }
+                                            return "Heute " + root.heatmapData.todayHours + " · Gesamt " + root.heatmapData.totalHours
+                                        }
+                                        font.family: Style.font.family
+                                        font.pixelSize: Style.font.caption
+                                        color: root.hoveredCell ? root.fg : root.dim
+                                    }
+
+                                    Row {
                                         spacing: Style.space(3)
+                                        Text {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "weniger"
+                                            font.family: Style.font.family
+                                            font.pixelSize: Style.font.caption * 0.8
+                                            color: root.faint
+                                        }
+                                        Repeater {
+                                            model: [0.07, 0.25, 0.5, 0.75, 1.0]
+                                            Rectangle {
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                width: Style.space(9)
+                                                height: width
+                                                radius: Style.space(2)
+                                                color: index === 0
+                                                    ? Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.07)
+                                                    : Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, modelData)
+                                            }
+                                        }
+                                        Text {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "mehr"
+                                            font.family: Style.font.family
+                                            font.pixelSize: Style.font.caption * 0.8
+                                            color: root.faint
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // =========================================================
+                    // TAB 2: STATISTIK (Stunden pro Fach)
+                    // =========================================================
+                    ColumnLayout {
+                        spacing: Style.space(12)
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: Style.space(6)
+
+                            StatTile {
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: 1
+                                fg: root.fg
+                                label: "HEUTE"
+                                value: root.heatmapData.todayHours
+                                valueColor: Color.accent
+                            }
+                            StatTile {
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: 1
+                                fg: root.fg
+                                label: "7 TAGE"
+                                value: root.weekStats.grandTotalHours
+                            }
+                            StatTile {
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: 1
+                                fg: root.fg
+                                label: "GESAMT"
+                                value: root.heatmapData.totalHours
+                            }
+                            StatTile {
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: 1
+                                fg: root.fg
+                                label: "STREAK"
+                                value: root.heatmapData.streakDays + " Tage"
+                            }
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: Style.space(8)
+
+                            SectionLabel {
+                                Layout.fillWidth: true
+                                fg: root.fg
+                                text: "STUNDEN NACH FACH"
+                            }
+                            Segmented {
+                                Layout.preferredWidth: Style.space(180)
+                                Layout.preferredHeight: Style.space(26)
+                                fg: root.fg
+                                value: root.tagStatsScope
+                                options: [
+                                    { value: "today", label: "Heute" },
+                                    { value: "week", label: "Woche" },
+                                    { value: "all", label: "Gesamt" }
+                                ]
+                                onPicked: function(v) { root.tagStatsScope = v }
+                            }
+                        }
+
+                        Item {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+
+                            ListView {
+                                id: tagList
+                                anchors.fill: parent
+                                clip: true
+                                spacing: Style.space(6)
+                                boundsBehavior: Flickable.StopAtBounds
+                                model: root.tagStatsData.tags
+                                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+
+                                delegate: Rectangle {
+                                    readonly property color tagCol: root.colorForTag(modelData.tag)
+                                    readonly property bool isActive: modelData.tag === root.activeTag
+                                    width: tagList.width
+                                    height: Style.space(50)
+                                    radius: Style.space(8)
+                                    color: tagRowMouse.containsMouse ? root.surfaceHover : root.surface
+                                    border.width: isActive ? 1 : 0
+                                    border.color: Qt.rgba(tagCol.r, tagCol.g, tagCol.b, 0.5)
+
+                                    Column {
+                                        anchors.fill: parent
+                                        anchors.margins: Style.space(10)
+                                        spacing: Style.space(6)
 
                                         RowLayout {
                                             width: parent.width
+                                            spacing: Style.space(8)
 
+                                            Rectangle {
+                                                width: Style.space(8)
+                                                height: width
+                                                radius: width / 2
+                                                color: tagCol
+                                            }
                                             Text {
-                                                text: "🏷️ " + modelData.tag
+                                                Layout.fillWidth: true
+                                                elide: Text.ElideRight
+                                                text: modelData.tag
                                                 font.family: Style.font.family
                                                 font.pixelSize: Style.font.bodySmall
                                                 font.bold: true
-                                                color: (root.rootWidget && root.rootWidget.activeTag === modelData.tag) ? Color.accent : root.fg
+                                                color: root.fg
                                             }
-
-                                            Item { Layout.fillWidth: true }
-
                                             Text {
-                                                text: modelData.hoursDec + " · " + modelData.percent + "%"
+                                                text: modelData.formatted
+                                                font.family: Style.font.family
+                                                font.pixelSize: Style.font.bodySmall
+                                                font.bold: true
+                                                color: root.fg
+                                            }
+                                            Text {
+                                                Layout.preferredWidth: Style.space(34)
+                                                horizontalAlignment: Text.AlignRight
+                                                text: modelData.percent + "%"
                                                 font.family: Style.font.family
                                                 font.pixelSize: Style.font.caption
                                                 color: root.dim
                                             }
                                         }
 
-                                        // Verteilungsbalken
                                         Rectangle {
                                             width: parent.width
                                             height: Style.space(5)
-                                            radius: Style.space(2.5)
+                                            radius: height / 2
                                             color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.08)
 
                                             Rectangle {
-                                                width: Math.max(Style.space(4), parent.width * (modelData.totalSeconds / Math.max(1, root.tagStatsData.grandTotalSeconds)))
+                                                width: Math.max(height, parent.width * modelData.ratio)
                                                 height: parent.height
-                                                radius: Style.space(2.5)
-                                                color: (root.rootWidget && root.rootWidget.activeTag === modelData.tag) ? Color.accent : Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.75)
+                                                radius: height / 2
+                                                color: tagCol
                                             }
                                         }
                                     }
-                                }
-                            }
-                        }
 
-                        PanelSeparator {
-                            foreground: root.fg
-                        }
-
-                        // -----------------------------------------------------
-                        // 5. 7-ZEILEN GITHUB-AKTIVITÄTSGRAPH (14 Wochen für schmale Breite)
-                        // -----------------------------------------------------
-                        Column {
-                            width: parent.width
-                            spacing: Style.space(8)
-
-                            RowLayout {
-                                width: parent.width
-
-                                Text {
-                                    text: "AKTIVITÄTSGRAPH (14 WOCHEN)"
-                                    font.family: Style.font.family
-                                    font.pixelSize: Style.font.caption
-                                    font.bold: true
-                                    color: root.dim
-                                }
-
-                                Item { Layout.fillWidth: true }
-
-                                Text {
-                                    text: root.heatmapData.streakDays + " Tage Streak 🔥"
-                                    font.family: Style.font.family
-                                    font.pixelSize: Style.font.caption
-                                    font.bold: true
-                                    color: Color.accent
-                                }
-                            }
-
-                            // GitHub-Grid
-                            Row {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                spacing: Style.space(3)
-
-                                // Spalte mit Wochentagen
-                                Column {
-                                    spacing: Style.space(3)
-                                    Repeater {
-                                        model: ["Mo", "", "Mi", "", "Fr", "", "So"]
-                                        Text {
-                                            width: Style.space(14)
-                                            height: Style.space(12)
-                                            text: modelData
-                                            font.family: Style.font.family
-                                            font.pixelSize: Style.font.caption * 0.72
-                                            color: root.faint
-                                            horizontalAlignment: Text.AlignHCenter
-                                            verticalAlignment: Text.AlignVCenter
-                                        }
+                                    MouseArea {
+                                        id: tagRowMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: if (root.w) root.w.activeTag = modelData.tag
                                     }
-                                }
 
-                                // 14 Wochenspalten
-                                Repeater {
-                                    model: root.heatmapData.weeks
-
-                                    Column {
-                                        spacing: Style.space(3)
-
-                                        Repeater {
-                                            model: modelData
-
-                                            Rectangle {
-                                                width: Style.space(12)
-                                                height: Style.space(12)
-                                                radius: Style.space(2)
-
-                                                color: {
-                                                    if (modelData.isFuture) return Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.03)
-                                                    if (modelData.level === 4) return Color.accent
-                                                    if (modelData.level === 3) return Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.80)
-                                                    if (modelData.level === 2) return Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.55)
-                                                    if (modelData.level === 1) return Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.30)
-                                                    return Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.07)
-                                                }
-
-                                                border.width: modelData.isToday ? 1 : 0
-                                                border.color: Color.accent
-
-                                                MouseArea {
-                                                    anchors.fill: parent
-                                                    hoverEnabled: !modelData.isFuture
-                                                    onEntered: root.hoveredCell = modelData
-                                                }
-                                            }
-                                        }
+                                    PanelToolTip {
+                                        visible: tagRowMouse.containsMouse
+                                        text: modelData.sessionCount + " Sessions · " + modelData.hoursDec + " · Klick: als aktives Fach setzen"
                                     }
                                 }
                             }
 
-                            // Detail-Box bei Hover
-                            Rectangle {
-                                width: parent.width
-                                height: Style.space(32)
-                                radius: Style.space(4)
-                                color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.05)
-                                border.width: 1
-                                border.color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.1)
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    width: parent.width - Style.space(14)
-                                    horizontalAlignment: Text.AlignHCenter
-                                    elide: Text.ElideRight
-                                    text: {
-                                        if (root.hoveredCell) {
-                                            var base = root.hoveredCell.dateStr + " — " + root.hoveredCell.focusTimeStr + " (" + root.hoveredCell.hoursDec + ")"
-                                            if (root.hoveredCell.dominantTags && root.hoveredCell.dominantTags.length > 0) {
-                                                return base + " · " + root.hoveredCell.dominantTags
-                                            }
-                                            return base
-                                        }
-                                        return "Kästchen berühren für Details"
-                                    }
-                                    font.family: Style.font.family
-                                    font.pixelSize: Style.font.caption
-                                    color: root.hoveredCell ? root.fg : root.dim
-                                }
-                            }
-
-                            // Kennzahlen-Karten
-                            RowLayout {
-                                width: parent.width
-                                spacing: Style.space(6)
-
-                                Rectangle {
-                                    Layout.fillWidth: true
-                                    height: Style.space(38)
-                                    radius: Style.space(4)
-                                    color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.04)
-
-                                    Column {
-                                        anchors.centerIn: parent
-                                        Text {
-                                            text: "HEUTE"
-                                            font.pixelSize: Style.font.caption * 0.75
-                                            font.bold: true
-                                            color: root.dim
-                                            anchors.horizontalCenter: parent.horizontalCenter
-                                        }
-                                        Text {
-                                            text: root.heatmapData.todayHours
-                                            font.pixelSize: Style.font.bodySmall
-                                            font.bold: true
-                                            color: root.fg
-                                            anchors.horizontalCenter: parent.horizontalCenter
-                                        }
-                                    }
-                                }
-
-                                Rectangle {
-                                    Layout.fillWidth: true
-                                    height: Style.space(38)
-                                    radius: Style.space(4)
-                                    color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.04)
-
-                                    Column {
-                                        anchors.centerIn: parent
-                                        Text {
-                                            text: "GESAMT"
-                                            font.pixelSize: Style.font.caption * 0.75
-                                            font.bold: true
-                                            color: root.dim
-                                            anchors.horizontalCenter: parent.horizontalCenter
-                                        }
-                                        Text {
-                                            text: root.heatmapData.totalHours
-                                            font.pixelSize: Style.font.bodySmall
-                                            font.bold: true
-                                            color: root.fg
-                                            anchors.horizontalCenter: parent.horizontalCenter
-                                        }
-                                    }
-                                }
-
-                                Rectangle {
-                                    Layout.fillWidth: true
-                                    height: Style.space(38)
-                                    radius: Style.space(4)
-                                    color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.04)
-
-                                    Column {
-                                        anchors.centerIn: parent
-                                        Text {
-                                            text: "SESSIONS"
-                                            font.pixelSize: Style.font.caption * 0.75
-                                            font.bold: true
-                                            color: root.dim
-                                            anchors.horizontalCenter: parent.horizontalCenter
-                                        }
-                                        Text {
-                                            text: "" + root.heatmapData.sessionCount
-                                            font.pixelSize: Style.font.bodySmall
-                                            font.bold: true
-                                            color: root.fg
-                                            anchors.horizontalCenter: parent.horizontalCenter
-                                        }
-                                    }
-                                }
+                            Text {
+                                anchors.centerIn: parent
+                                visible: tagList.count === 0
+                                text: "Noch keine Lernzeit in diesem Zeitraum"
+                                font.family: Style.font.family
+                                font.pixelSize: Style.font.caption
+                                color: root.dim
                             }
                         }
                     }
 
                     // =========================================================
-                    // SLIDE 2: System-Uptime & Programm-Nutzung
+                    // TAB 3: SYSTEM (Uptime + Programme)
                     // =========================================================
-                    Column {
-                        width: parent.width
+                    ColumnLayout {
                         spacing: Style.space(12)
-                        visible: root.currentTab === 1
 
-                        // -----------------------------------------------------
-                        // System-Uptime Hero-Karte
-                        // -----------------------------------------------------
+                        // Uptime-Karte
                         Rectangle {
-                            width: parent.width
-                            height: Style.space(70)
-                            radius: Style.space(6)
-                            color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.05)
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Style.space(64)
+                            radius: Style.space(12)
+                            color: root.surface
                             border.width: 1
-                            border.color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.3)
+                            border.color: root.hairline
 
                             RowLayout {
                                 anchors.fill: parent
@@ -910,15 +956,16 @@ Panel {
                                 spacing: Style.space(12)
 
                                 Rectangle {
-                                    width: Style.space(42)
-                                    height: Style.space(42)
-                                    radius: Style.space(8)
+                                    Layout.preferredWidth: Style.space(40)
+                                    Layout.preferredHeight: Style.space(40)
+                                    radius: Style.space(10)
                                     color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.15)
 
                                     Text {
                                         anchors.centerIn: parent
-                                        text: "󰍹"
-                                        font.pixelSize: Style.font.display
+                                        text: "󰔟"
+                                        font.family: Style.font.family
+                                        font.pixelSize: Style.font.iconLarge
                                         color: Color.accent
                                     }
                                 }
@@ -927,54 +974,61 @@ Panel {
                                     Layout.fillWidth: true
                                     spacing: Style.space(2)
 
-                                    Text {
-                                        text: "SYSTEMLAUFZEIT (UPTIME)"
-                                        font.family: Style.font.family
-                                        font.pixelSize: Style.font.caption * 0.8
-                                        font.bold: true
-                                        color: root.dim
+                                    SectionLabel {
+                                        width: parent.width
+                                        fg: root.fg
+                                        font.pixelSize: Style.font.caption * 0.85
+                                        text: "SYSTEM LÄUFT SEIT"
                                     }
-
                                     Text {
-                                        text: Model.formatUptime(root.rootWidget ? root.rootWidget.systemUptimeSeconds : 0)
+                                        width: parent.width
+                                        elide: Text.ElideRight
+                                        text: Model.formatUptime(root.w ? root.w.systemUptimeSeconds : 0)
                                         font.family: Style.font.family
                                         font.pixelSize: Style.font.heading
                                         font.bold: true
                                         color: root.fg
                                     }
+                                }
+
+                                Column {
+                                    spacing: Style.space(2)
 
                                     Text {
-                                        text: "Einschaltdauer des Computers"
+                                        anchors.right: parent.right
+                                        text: "GESTARTET"
                                         font.family: Style.font.family
                                         font.pixelSize: Style.font.caption * 0.85
-                                        color: root.faint
+                                        font.bold: true
+                                        color: root.dim
+                                    }
+                                    Text {
+                                        anchors.right: parent.right
+                                        text: {
+                                            var up = root.w ? root.w.systemUptimeSeconds : 0
+                                            if (up <= 0) return "–"
+                                            var d = new Date(Date.now() - up * 1000)
+                                            return Model.padZero(d.getHours()) + ":" + Model.padZero(d.getMinutes()) + " Uhr"
+                                        }
+                                        font.family: Style.font.family
+                                        font.pixelSize: Style.font.bodySmall
+                                        font.bold: true
+                                        color: root.fg
                                     }
                                 }
                             }
                         }
 
-                        PanelSeparator {
-                            foreground: root.fg
-                        }
-
-                        // -----------------------------------------------------
-                        // Stunden in Programmen verbracht
-                        // -----------------------------------------------------
                         RowLayout {
-                            width: parent.width
+                            Layout.fillWidth: true
 
-                            Text {
+                            SectionLabel {
+                                Layout.fillWidth: true
+                                fg: root.fg
                                 text: "PROGRAMMNUTZUNG"
-                                font.family: Style.font.family
-                                font.pixelSize: Style.font.caption
-                                font.bold: true
-                                color: root.dim
                             }
-
-                            Item { Layout.fillWidth: true }
-
                             Text {
-                                text: root.appUsageData.totalHours
+                                text: root.appUsageData.totalFormatted
                                 font.family: Style.font.family
                                 font.pixelSize: Style.font.caption
                                 font.bold: true
@@ -982,186 +1036,348 @@ Panel {
                             }
                         }
 
-                        // Zeitraum-Umschalter
-                        Row {
-                            spacing: Style.space(4)
-
-                            Button {
-                                text: "Session"
-                                selected: root.appScope === "current"
-                                bordered: true
-                                fontSize: Style.font.caption
-                                onClicked: root.appScope = "current"
-                            }
-
-                            Button {
-                                text: "Heute"
-                                selected: root.appScope === "today"
-                                bordered: true
-                                fontSize: Style.font.caption
-                                onClicked: root.appScope = "today"
-                            }
-
-                            Button {
-                                text: "Gesamt"
-                                selected: root.appScope === "all"
-                                bordered: true
-                                fontSize: Style.font.caption
-                                onClicked: root.appScope = "all"
-                            }
+                        Segmented {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Style.space(26)
+                            fg: root.fg
+                            value: root.appScope
+                            options: [
+                                { value: "current", label: "Session" },
+                                { value: "today", label: "Heute" },
+                                { value: "week", label: "Woche" },
+                                { value: "all", label: "Gesamt" }
+                            ]
+                            onPicked: function(v) { root.appScope = v }
                         }
 
-                        // Filter nach Fach/Tag
-                        Column {
-                            width: parent.width
-                            spacing: Style.space(4)
+                        // Fach-Filter: horizontal scrollbar, feste Höhe
+                        ListView {
+                            id: filterList
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Style.space(24)
+                            orientation: ListView.Horizontal
+                            spacing: Style.space(6)
+                            clip: true
+                            boundsBehavior: Flickable.StopAtBounds
+                            enabled: root.appScope !== "current"
+                            opacity: enabled ? 1 : 0.35
+                            model: [""].concat(root.w ? root.w.recentTags : [])
 
-                            Text {
-                                text: "NACH FACH FILTERN"
-                                font.family: Style.font.family
-                                font.pixelSize: Style.font.caption * 0.8
-                                font.bold: true
-                                color: root.dim
-                            }
+                            delegate: Rectangle {
+                                readonly property bool sel: root.appTagFilter === modelData
+                                readonly property color chipCol: modelData === "" ? Color.accent : root.colorForTag(modelData)
+                                height: filterList.height
+                                width: chipText.implicitWidth + Style.space(18)
+                                radius: height / 2
+                                color: sel ? Qt.rgba(chipCol.r, chipCol.g, chipCol.b, 0.22)
+                                           : (chipMouse.containsMouse ? root.surfaceHover : root.surface)
+                                border.width: 1
+                                border.color: sel ? chipCol : root.hairline
 
-                            Flow {
-                                width: parent.width
-                                spacing: Style.space(4)
-
-                                Rectangle {
-                                    height: Style.space(22)
-                                    width: allTagLabel.implicitWidth + Style.space(12)
-                                    radius: Style.space(11)
-                                    color: (root.appTagFilter === "")
-                                        ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.25)
-                                        : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.08)
-                                    border.width: 1
-                                    border.color: (root.appTagFilter === "") ? Color.accent : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.15)
-
-                                    Text {
-                                        id: allTagLabel
-                                        anchors.centerIn: parent
-                                        text: "Alle"
-                                        font.pixelSize: Style.font.caption
-                                        color: (root.appTagFilter === "") ? Color.accent : root.fg
-                                    }
-
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: root.appTagFilter = ""
-                                    }
+                                Text {
+                                    id: chipText
+                                    anchors.centerIn: parent
+                                    text: modelData === "" ? "Alle Fächer" : modelData
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.caption
+                                    font.bold: parent.sel
+                                    color: parent.sel ? root.fg : root.dim
                                 }
 
-                                Repeater {
-                                    model: root.rootWidget ? root.rootWidget.recentTags : []
-
-                                    Rectangle {
-                                        height: Style.space(22)
-                                        width: tLabel.implicitWidth + Style.space(12)
-                                        radius: Style.space(11)
-                                        color: (root.appTagFilter === modelData)
-                                            ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.25)
-                                            : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.08)
-                                        border.width: 1
-                                        border.color: (root.appTagFilter === modelData) ? Color.accent : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.15)
-
-                                        Text {
-                                            id: tLabel
-                                            anchors.centerIn: parent
-                                            text: "🏷️ " + modelData
-                                            font.pixelSize: Style.font.caption
-                                            color: (root.appTagFilter === modelData) ? Color.accent : root.fg
-                                        }
-
-                                        MouseArea {
-                                            anchors.fill: parent
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: root.appTagFilter = modelData
-                                        }
-                                    }
+                                MouseArea {
+                                    id: chipMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.appTagFilter = modelData
                                 }
                             }
                         }
 
-                        // Rangliste der Programme & Stunden
-                        Column {
-                            width: parent.width
-                            spacing: Style.space(10)
-                            visible: root.appUsageData.apps.length > 0
+                        Item {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
 
-                            Repeater {
+                            ListView {
+                                id: appList
+                                anchors.fill: parent
+                                clip: true
+                                spacing: Style.space(10)
+                                boundsBehavior: Flickable.StopAtBounds
                                 model: root.appUsageData.apps
+                                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
-                                Column {
-                                    width: parent.width
-                                    spacing: Style.space(3)
+                                delegate: Column {
+                                    width: appList.width
+                                    spacing: Style.space(4)
 
                                     RowLayout {
                                         width: parent.width
+                                        spacing: Style.space(8)
 
+                                        // Initiale als App-"Icon"
+                                        Rectangle {
+                                            Layout.preferredWidth: Style.space(22)
+                                            Layout.preferredHeight: Style.space(22)
+                                            radius: Style.space(6)
+                                            color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.15)
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: modelData.app.length > 0 ? modelData.app.charAt(0).toUpperCase() : "?"
+                                                font.family: Style.font.family
+                                                font.pixelSize: Style.font.caption
+                                                font.bold: true
+                                                color: Color.accent
+                                            }
+                                        }
                                         Text {
-                                            text: "󰆍 " + modelData.app
+                                            Layout.fillWidth: true
+                                            elide: Text.ElideRight
+                                            text: modelData.app
                                             font.family: Style.font.family
                                             font.pixelSize: Style.font.bodySmall
                                             font.bold: true
                                             color: root.fg
                                         }
-
-                                        Item { Layout.fillWidth: true }
-
                                         Text {
-                                            text: modelData.hoursDec + " (" + modelData.percent + "%)"
+                                            text: modelData.formatted
+                                            font.family: Style.font.family
+                                            font.pixelSize: Style.font.caption
+                                            color: root.fg
+                                        }
+                                        Text {
+                                            Layout.preferredWidth: Style.space(34)
+                                            horizontalAlignment: Text.AlignRight
+                                            text: modelData.percent + "%"
                                             font.family: Style.font.family
                                             font.pixelSize: Style.font.caption
                                             color: root.dim
                                         }
                                     }
 
-                                    // Balken für App-Nutzung
                                     Rectangle {
-                                        width: parent.width
-                                        height: Style.space(6)
-                                        radius: Style.space(3)
+                                        x: Style.space(30)
+                                        width: parent.width - Style.space(30)
+                                        height: Style.space(4)
+                                        radius: height / 2
                                         color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.08)
 
                                         Rectangle {
-                                            width: Math.max(Style.space(4), parent.width * (modelData.seconds / Math.max(1, root.appUsageData.totalSeconds)))
+                                            width: Math.max(height, parent.width * modelData.ratio)
                                             height: parent.height
-                                            radius: Style.space(3)
+                                            radius: height / 2
                                             color: Color.accent
                                         }
                                     }
                                 }
                             }
-                        }
-
-                        // Leerer Zustand wenn keine App-Daten für diesen Filter
-                        Rectangle {
-                            width: parent.width
-                            height: Style.space(100)
-                            radius: Style.space(6)
-                            color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.04)
-                            visible: root.appUsageData.apps.length === 0
 
                             Column {
                                 anchors.centerIn: parent
+                                visible: appList.count === 0
                                 spacing: Style.space(4)
 
                                 Text {
                                     anchors.horizontalCenter: parent.horizontalCenter
                                     text: "󰄶"
-                                    font.pixelSize: Style.font.title
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.display
                                     color: root.faint
                                 }
-
                                 Text {
                                     anchors.horizontalCenter: parent.horizontalCenter
-                                    text: "Keine Programmnutzung erfasst"
+                                    text: root.appScope === "current"
+                                        ? "Starte den Timer, um Programme zu erfassen"
+                                        : "Keine Programmnutzung in diesem Zeitraum"
+                                    font.family: Style.font.family
                                     font.pixelSize: Style.font.caption
                                     color: root.dim
                                 }
                             }
+                        }
+                    }
+                }
+            }
+
+            // -----------------------------------------------------------------
+            // Tag-Menü (schwebt über dem Inhalt → Panelgröße bleibt konstant)
+            // -----------------------------------------------------------------
+            MouseArea {
+                anchors.fill: parent
+                z: 50
+                visible: root.tagMenuOpen
+                onClicked: root.closeTagMenu()
+            }
+
+            Rectangle {
+                id: tagMenu
+                z: 51
+                x: root.tagMenuX
+                y: root.tagMenuY
+                width: Style.space(230)
+                height: tagMenuCol.implicitHeight + Style.space(16)
+                radius: Style.space(10)
+                color: Color.popups.background
+                border.width: 1
+                border.color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.18)
+                visible: opacity > 0
+                opacity: root.tagMenuOpen ? 1 : 0
+                Behavior on opacity { NumberAnimation { duration: 120 } }
+
+                // Klicks im Menü nicht zum Schließen durchreichen
+                MouseArea { anchors.fill: parent }
+
+                Column {
+                    id: tagMenuCol
+                    anchors.top: parent.top
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.margins: Style.space(8)
+                    spacing: Style.space(6)
+
+                    // Eingabe ganz oben: tippen → neues Fach anlegen
+                    RowLayout {
+                        width: parent.width
+                        spacing: Style.space(6)
+
+                        TextField {
+                            id: tagInput
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Style.space(30)
+                            foreground: root.fg
+                            placeholderText: "Neues Fach…"
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.bodySmall
+                            maximumLength: 24
+                            onAccepted: root.submitNewTag()
+                            Keys.onEscapePressed: root.closeTagMenu()
+                        }
+
+                        Rectangle {
+                            Layout.preferredWidth: Style.space(30)
+                            Layout.preferredHeight: Style.space(30)
+                            radius: Style.space(6)
+                            readonly property bool can: tagInput.text.trim().length > 0
+                            color: can ? Color.accent : root.surface
+                            Text {
+                                anchors.centerIn: parent
+                                text: "󰐕"
+                                font.family: Style.font.family
+                                font.pixelSize: Style.font.icon
+                                color: parent.can ? Color.popups.background : root.dim
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.submitNewTag()
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        width: parent.width
+                        height: 1
+                        color: root.hairline
+                    }
+
+                    // Gefilterte Liste vorhandener Fächer
+                    ListView {
+                        id: tagMenuList
+                        readonly property var filtered: {
+                            var all = root.w ? root.w.recentTags : []
+                            var q = tagInput.text.trim().toLowerCase()
+                            if (q.length === 0) return all
+                            return all.filter(function(t) { return t.toLowerCase().indexOf(q) !== -1 })
+                        }
+                        readonly property real rowH: Style.space(28)
+                        width: parent.width
+                        height: Math.max(rowH, Math.min(filtered.length, 6) * (rowH + spacing))
+                        implicitHeight: height
+                        spacing: Style.space(2)
+                        clip: true
+                        boundsBehavior: Flickable.StopAtBounds
+                        model: filtered
+                        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+
+                        delegate: Rectangle {
+                            readonly property bool sel: modelData === root.activeTag
+                            readonly property color tagCol: root.colorForTag(modelData)
+                            width: tagMenuList.width
+                            height: tagMenuList.rowH
+                            radius: Style.space(6)
+                            color: sel ? Qt.rgba(tagCol.r, tagCol.g, tagCol.b, 0.18)
+                                       : (rowMouse.containsMouse ? root.surfaceHover : "transparent")
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: Style.space(8)
+                                anchors.rightMargin: Style.space(6)
+                                spacing: Style.space(8)
+
+                                Rectangle {
+                                    Layout.preferredWidth: Style.space(8)
+                                    Layout.preferredHeight: Style.space(8)
+                                    radius: Style.space(4)
+                                    color: tagCol
+                                }
+                                Text {
+                                    Layout.fillWidth: true
+                                    elide: Text.ElideRight
+                                    text: modelData
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.bodySmall
+                                    font.bold: sel
+                                    color: root.fg
+                                }
+                                Text {
+                                    visible: sel && !rowMouse.containsMouse
+                                    text: "󰄬"
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.caption
+                                    color: tagCol
+                                }
+                                Text {
+                                    visible: rowMouse.containsMouse
+                                    text: "󰆴"
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.caption
+                                    color: trashMouse.containsMouse ? Color.urgent : root.dim
+
+                                    MouseArea {
+                                        id: trashMouse
+                                        anchors.fill: parent
+                                        anchors.margins: -Style.space(4)
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: if (root.w) root.w.removeTag(modelData)
+                                    }
+                                }
+                            }
+
+                            MouseArea {
+                                id: rowMouse
+                                anchors.fill: parent
+                                anchors.rightMargin: Style.space(24)
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    if (root.w) root.w.activeTag = modelData
+                                    root.closeTagMenu()
+                                }
+                            }
+                        }
+
+                        Text {
+                            anchors.centerIn: parent
+                            visible: tagMenuList.count === 0
+                            text: "Enter → \"" + tagInput.text.trim() + "\" anlegen"
+                            width: parent.width
+                            horizontalAlignment: Text.AlignHCenter
+                            elide: Text.ElideRight
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                            color: root.dim
                         }
                     }
                 }
