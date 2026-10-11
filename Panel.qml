@@ -1955,6 +1955,7 @@ Panel {
                                         cursorShape: Qt.PointingHandCursor
                                         onClicked: if (root.w) {
                                             if (root.activeColorTarget === modelData) root.activeColorTarget = ""
+                                            if (root.appTagFilter === modelData) root.appTagFilter = ""
                                             root.w.removeTag(modelData)
                                         }
                                     }

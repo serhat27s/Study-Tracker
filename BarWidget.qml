@@ -83,11 +83,11 @@ BarWidget {
                 var content = text()
                 if (content && content.length > 0) {
                     var parsed = JSON.parse(content)
-                    if (parsed && Array.isArray(parsed.history) && parsed.history.length > 0) {
+                    if (parsed && Array.isArray(parsed.history)) {
                         var hasReal = parsed.history.some(function(s) {
                             return s.id && String(s.id).indexOf("sess_") === 0
                         })
-                        if (!hasReal && parsed.history.length <= 15) {
+                        if (!parsed.initialized && !hasReal && parsed.history.length <= 15) {
                             root.history = Model.defaultSampleHistory()
                             root.saveToDisk()
                         } else {
@@ -96,6 +96,9 @@ BarWidget {
                     } else {
                         root.history = Model.defaultSampleHistory()
                         root.saveToDisk()
+                    }
+                    if (parsed && parsed.activeTag && String(parsed.activeTag).trim().length > 0) {
+                        root.activeTag = String(parsed.activeTag).trim()
                     }
                     if (parsed && Array.isArray(parsed.recentTags) && parsed.recentTags.length > 0) {
                         root.recentTags = parsed.recentTags
@@ -137,6 +140,8 @@ BarWidget {
 
     function saveToDisk() {
         var payload = {
+            initialized: true,
+            activeTag: root.activeTag,
             history: root.history,
             recentTags: root.recentTags,
             tagColors: root.tagColors,
@@ -406,23 +411,58 @@ BarWidget {
     }
 
     function removeTag(tag) {
-        var clean = String(tag).trim()
+        var clean = String(tag || "").trim()
+        if (clean.length === 0) return
+
+        // 1. Remove from recentTags (case-insensitive check)
         var tags = root.recentTags.slice()
-        var idx = tags.indexOf(clean)
+        var idx = -1
+        for (var i = 0; i < tags.length; i++) {
+            if (String(tags[i]).trim().toLowerCase() === clean.toLowerCase()) {
+                idx = i
+                break
+            }
+        }
         if (idx !== -1) {
             tags.splice(idx, 1)
-            if (tags.length === 0) tags = ["General"]
-            root.recentTags = tags
-            if (root.activeTag === clean) {
-                root.activeTag = tags[0]
+        }
+        if (tags.length === 0) tags = ["General"]
+        root.recentTags = tags
+
+        // 2. If activeTag is this tag, switch to first remaining tag
+        if (String(root.activeTag).trim().toLowerCase() === clean.toLowerCase()) {
+            root.activeTag = tags[0]
+            if (!root.isRunning) {
+                root.sessionDuration = 0
+                root.currentAppUsage = ({})
             }
-            if (root.tagColors && root.tagColors[clean]) {
-                var nextColors = Object.assign({}, root.tagColors)
-                delete nextColors[clean]
+        }
+
+        // 3. Remove custom color if present
+        if (root.tagColors) {
+            var nextColors = Object.assign({}, root.tagColors)
+            var hadColor = false
+            for (var cKey in nextColors) {
+                if (String(cKey).trim().toLowerCase() === clean.toLowerCase()) {
+                    delete nextColors[cKey]
+                    hadColor = true
+                }
+            }
+            if (hadColor) {
                 root.tagColors = nextColors
             }
-            root.saveToDisk()
         }
+
+        // 4. Purge all sessions matching this tag from history so it doesn't mess up stats
+        var nextHistory = root.history.filter(function(sess) {
+            if (!sess) return false
+            var sessTag = String(sess.tag || "").trim().toLowerCase()
+            return sessTag !== clean.toLowerCase()
+        })
+        root.history = nextHistory
+
+        // 5. Persist to disk
+        root.saveToDisk()
     }
 
     function formattedTime() {
