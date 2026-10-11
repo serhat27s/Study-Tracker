@@ -105,6 +105,88 @@ function tagColor(tagName, customMap) {
     return TAG_COLORS[Math.abs(hash) % TAG_COLORS.length];
 }
 
+// -----------------------------------------------------------------------------
+// Color Utilities (HSV, Hex conversion & Random Color Generation)
+// -----------------------------------------------------------------------------
+function hsvToRgb(h, s, v) {
+    var r, g, b;
+    var i = Math.floor(h * 6);
+    var f = h * 6 - i;
+    var p = v * (1 - s);
+    var q = v * (1 - f * s);
+    var t = v * (1 - (1 - f) * s);
+    switch (i % 6) {
+        case 0: r = v; g = t; b = p; break;
+        case 1: r = q; g = v; b = p; break;
+        case 2: r = p; g = v; b = t; break;
+        case 3: r = p; g = q; b = v; break;
+        case 4: r = t; g = p; b = v; break;
+        case 5: r = v; g = p; b = q; break;
+    }
+    return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+}
+
+function rgbToHsv(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    var max = Math.max(r, g, b), min = Math.min(r, g, b);
+    var h = 0, s, v = max;
+    var d = max - min;
+    s = max === 0 ? 0 : d / max;
+    if (max === min) {
+        h = 0;
+    } else {
+        switch (max) {
+            case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+            case g: h = (b - r) / d + 2; break;
+            case b: h = (r - g) / d + 4; break;
+        }
+        h /= 6;
+    }
+    return [h, s, v];
+}
+
+function hexToRgb(hex) {
+    if (!hex || typeof hex !== "string") return null;
+    hex = hex.replace("#", "").trim();
+    if (hex.length === 3) {
+        hex = hex.charAt(0) + hex.charAt(0) + hex.charAt(1) + hex.charAt(1) + hex.charAt(2) + hex.charAt(2);
+    }
+    if (hex.length !== 6) return null;
+    var num = parseInt(hex, 16);
+    if (isNaN(num)) return null;
+    return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
+}
+
+function rgbToHex(r, g, b) {
+    var toH = function(c) {
+        var s = Math.max(0, Math.min(255, Math.round(c))).toString(16);
+        return s.length === 1 ? "0" + s : s;
+    };
+    return "#" + toH(r) + toH(g) + toH(b);
+}
+
+function hsvToHex(h, s, v) {
+    var rgb = hsvToRgb(h, s, v);
+    return rgbToHex(rgb[0], rgb[1], rgb[2]);
+}
+
+function hexToHsv(hex) {
+    var rgb = hexToRgb(hex);
+    if (!rgb) return [0, 1, 1];
+    return rgbToHsv(rgb[0], rgb[1], rgb[2]);
+}
+
+function randomCuratedOrHex(curatedPalette) {
+    if (Math.random() < 0.5 && curatedPalette && curatedPalette.length > 0) {
+        var idx = Math.floor(Math.random() * curatedPalette.length);
+        return curatedPalette[idx];
+    }
+    var h = Math.random();
+    var s = 0.65 + Math.random() * 0.35;
+    var v = 0.80 + Math.random() * 0.20;
+    return hsvToHex(h, s, v);
+}
+
 var MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 var DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 

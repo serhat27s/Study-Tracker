@@ -22,6 +22,11 @@ Panel {
     property real tagMenuX: 0
     property real tagMenuY: 0
     property string activeColorTarget: "" // "" | "__new__" | tagName
+    onActiveColorTargetChanged: {
+        if (root.activeColorTarget.length > 0 && typeof colorPaletteCard !== "undefined" && colorPaletteCard) {
+            colorPaletteCard.syncFromTarget()
+        }
+    }
     property string newTagColor: ""       // "" (Auto) or custom hex for newly added tag
     property real paletteTargetY: 0
     property bool pomodoroSettingsOpen: false
@@ -209,11 +214,10 @@ Panel {
             var pos = item.mapToItem(tagMenu, 0, 0)
             var itemY = pos.y
             var itemH = item.height
-            var palH = Style.space(110)
+            var palH = (typeof colorPaletteCard !== "undefined" && colorPaletteCard && colorPaletteCard.implicitHeight > 0)
+                ? colorPaletteCard.implicitHeight : Style.space(200)
 
-            // Dynamisch positionieren:
-            // Bei Tags mit genug Platz oberhalb (wie dem letzten Tag): direkt OBERHALB des Tags ("darüber")
-            // Bei obersten Tags: direkt UNTERHALB des Tags
+            // Dynamically position palette above or below item
             var topLimit = Style.space(42)
             if (itemY - palH - Style.space(4) >= topLimit) {
                 root.paletteTargetY = itemY - palH - Style.space(4)
@@ -1672,8 +1676,8 @@ Panel {
                 z: 51
                 x: root.tagMenuX
                 y: root.tagMenuY
-                width: Style.space(264)
-                height: Math.max(tagMenuCol.implicitHeight + Style.space(16), root.activeColorTarget.length > 0 ? (root.paletteTargetY + Style.space(120)) : 0)
+                width: Style.space(280)
+                height: Math.max(tagMenuCol.implicitHeight + Style.space(16), root.activeColorTarget.length > 0 ? (root.paletteTargetY + (typeof colorPaletteCard !== "undefined" && colorPaletteCard && colorPaletteCard.implicitHeight > 0 ? colorPaletteCard.implicitHeight : Style.space(200)) + Style.space(12)) : 0)
                 Behavior on height { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
                 radius: Style.space(10)
                 color: Color.popups.background
@@ -1952,7 +1956,7 @@ Panel {
                     width: parent.width - Style.space(16)
                     y: root.paletteTargetY
                     Behavior on y { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
-                    implicitHeight: colorPickerCol.implicitHeight + Style.space(12)
+                    implicitHeight: colorPickerCol.implicitHeight + Style.space(16)
                     radius: Style.space(8)
                     color: Color.popups.background
                     border.width: 1.5
@@ -1960,6 +1964,83 @@ Panel {
                     visible: opacity > 0
                     opacity: root.activeColorTarget.length > 0 ? 1 : 0
                     Behavior on opacity { NumberAnimation { duration: 140 } }
+
+                    property real hueVal: 0.0
+                    property real satVal: 1.0
+                    property real briVal: 1.0
+                    property bool isSyncing: false
+
+                    readonly property color currentColor: {
+                        if (root.activeColorTarget === "__new__") {
+                            return root.newTagColor.length > 0 ? root.newTagColor : Color.accent
+                        }
+                        return root.colorForTag(root.activeColorTarget)
+                    }
+
+                    function syncFromTarget() {
+                        if (!root.activeColorTarget || root.activeColorTarget.length === 0) return
+                        var hex = ""
+                        if (root.activeColorTarget === "__new__") {
+                            hex = root.newTagColor.length > 0 ? root.newTagColor : (root.w ? Model.tagColor("", null) : "#3b82f6")
+                        } else {
+                            hex = root.colorForTag(root.activeColorTarget)
+                        }
+                        syncHsvFromHex(hex)
+                    }
+
+                    function syncHsvFromHex(hexStr) {
+                        if (!hexStr) return
+                        var hexNorm = String(hexStr).trim()
+                        if (hexNorm.indexOf("#") !== 0) hexNorm = "#" + hexNorm
+                        var hsv = Model.hexToHsv(hexNorm)
+                        isSyncing = true
+                        hueVal = hsv[0]
+                        satVal = hsv[1]
+                        briVal = hsv[2]
+                        customHexInput.text = hexNorm.toLowerCase()
+                        isSyncing = false
+                    }
+
+                    function applyFromSliders() {
+                        if (isSyncing) return
+                        var hex = Model.hsvToHex(hueVal, satVal, briVal)
+                        isSyncing = true
+                        customHexInput.text = hex
+                        isSyncing = false
+                        applyColorToTarget(hex)
+                    }
+
+                    function applyColorToTarget(hex) {
+                        if (root.activeColorTarget === "__new__") {
+                            root.newTagColor = hex
+                        } else if (root.w && root.activeColorTarget.length > 0) {
+                            root.w.setTagColor(root.activeColorTarget, hex)
+                        }
+                    }
+
+                    function selectSwatch(hex) {
+                        applyColorToTarget(hex)
+                        syncHsvFromHex(hex)
+                    }
+
+                    function pickRandomColor() {
+                        var hex = Model.randomCuratedOrHex(root.colorPalette)
+                        selectSwatch(hex)
+                    }
+
+                    function setAutoColor() {
+                        if (root.activeColorTarget === "__new__") {
+                            root.newTagColor = ""
+                            var defHex = Model.tagColor("", null)
+                            syncHsvFromHex(defHex)
+                        } else if (root.w && root.activeColorTarget.length > 0) {
+                            root.w.setTagColor(root.activeColorTarget, "")
+                            var defHex = root.colorForTag(root.activeColorTarget)
+                            syncHsvFromHex(defHex)
+                        }
+                    }
+
+                    Component.onCompleted: syncFromTarget()
 
                     // Do not propagate clicks inside palette to list underneath
                     MouseArea { anchors.fill: parent }
@@ -1969,7 +2050,7 @@ Panel {
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.top: parent.top
-                        anchors.margins: Style.space(6)
+                        anchors.margins: Style.space(8)
                         spacing: Style.space(6)
 
                         // Title row
@@ -1978,12 +2059,12 @@ Panel {
                             spacing: Style.space(6)
 
                             Rectangle {
-                                Layout.preferredWidth: Style.space(10)
-                                Layout.preferredHeight: Style.space(10)
-                                radius: Style.space(5)
-                                color: root.activeColorTarget === "__new__"
-                                    ? (root.newTagColor.length > 0 ? root.newTagColor : Color.accent)
-                                    : root.colorForTag(root.activeColorTarget)
+                                Layout.preferredWidth: Style.space(12)
+                                Layout.preferredHeight: Style.space(12)
+                                radius: Style.space(6)
+                                color: colorPaletteCard.currentColor
+                                border.width: 1
+                                border.color: Qt.rgba(255, 255, 255, 0.4)
                             }
 
                             Text {
@@ -2015,26 +2096,34 @@ Panel {
                             }
                         }
 
-                        // 14 Swatches
-                        Flow {
-                            width: parent.width
-                            spacing: Style.space(5)
+                        // Curated Swatches Grid: A 2-row grid of 7 circular color swatches
+                        Grid {
+                            id: swatchesGrid
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            columns: 7
+                            rows: 2
+                            rowSpacing: Style.space(6)
+                            columnSpacing: Style.space(6)
 
                             Repeater {
                                 model: root.colorPalette
 
                                 Rectangle {
-                                    width: Style.space(22)
-                                    height: Style.space(22)
-                                    radius: Style.space(11)
+                                    id: swatchCircle
+                                    width: Style.space(24)
+                                    height: Style.space(24)
+                                    radius: width / 2
                                     color: modelData
                                     readonly property bool isCurrent: {
-                                        if (root.activeColorTarget === "__new__") return root.newTagColor.toLowerCase() === modelData.toLowerCase()
-                                        var cur = root.w && root.w.tagColors && root.w.tagColors[root.activeColorTarget]
-                                        return cur && cur.toLowerCase() === modelData.toLowerCase()
+                                        var cur = root.activeColorTarget === "__new__"
+                                            ? root.newTagColor
+                                            : (root.w && root.w.tagColors ? root.w.tagColors[root.activeColorTarget] : "")
+                                        return Boolean(cur && cur.toLowerCase() === modelData.toLowerCase())
                                     }
-                                    border.width: isCurrent ? 2 : (swatchMouse.containsMouse ? 1.5 : 1)
-                                    border.color: isCurrent ? root.fg : (swatchMouse.containsMouse ? Color.accent : Qt.rgba(0, 0, 0, 0.25))
+                                    border.width: isCurrent ? 2.5 : (swatchMouse.containsMouse ? 2 : 1)
+                                    border.color: isCurrent ? "#ffffff" : (swatchMouse.containsMouse ? Color.accent : Qt.rgba(0, 0, 0, 0.35))
+                                    scale: swatchMouse.containsMouse ? 1.12 : 1.0
+                                    Behavior on scale { NumberAnimation { duration: 90 } }
 
                                     Text {
                                         anchors.centerIn: parent
@@ -2051,19 +2140,262 @@ Panel {
                                         anchors.fill: parent
                                         hoverEnabled: true
                                         cursorShape: Qt.PointingHandCursor
-                                        onClicked: {
-                                            if (root.activeColorTarget === "__new__") {
-                                                root.newTagColor = modelData
-                                            } else if (root.w) {
-                                                root.w.setTagColor(root.activeColorTarget, modelData)
-                                            }
-                                        }
+                                        onClicked: colorPaletteCard.selectSwatch(modelData)
                                     }
                                 }
                             }
                         }
 
-                        // Hex input + Auto button
+                        Rectangle {
+                            width: parent.width
+                            height: 1
+                            color: root.hairline
+                        }
+
+                        // Interactive HSV Chooser: Hue, Saturation, Brightness Sliders
+                        // Hue Slider (0° - 360°)
+                        RowLayout {
+                            width: parent.width
+                            spacing: Style.space(6)
+
+                            Text {
+                                Layout.preferredWidth: Style.space(24)
+                                text: "Hue"
+                                font.family: Style.font.family
+                                font.pixelSize: Style.font.caption * 0.75
+                                font.bold: true
+                                color: root.dim
+                            }
+
+                            Item {
+                                id: hueTrackBox
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: Style.space(16)
+
+                                Rectangle {
+                                    id: hueTrack
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    height: Style.space(10)
+                                    radius: Style.space(5)
+                                    border.width: 1
+                                    border.color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.2)
+                                    gradient: Gradient {
+                                        orientation: Gradient.Horizontal
+                                        GradientStop { position: 0.00; color: "#ff0000" }
+                                        GradientStop { position: 0.17; color: "#ffff00" }
+                                        GradientStop { position: 0.33; color: "#00ff00" }
+                                        GradientStop { position: 0.50; color: "#00ffff" }
+                                        GradientStop { position: 0.67; color: "#0000ff" }
+                                        GradientStop { position: 0.83; color: "#ff00ff" }
+                                        GradientStop { position: 1.00; color: "#ff0000" }
+                                    }
+                                }
+
+                                Rectangle {
+                                    id: hueThumb
+                                    width: Style.space(16)
+                                    height: Style.space(16)
+                                    radius: width / 2
+                                    x: Math.max(0, Math.min(hueTrackBox.width - width, colorPaletteCard.hueVal * (hueTrackBox.width - width)))
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    color: Qt.hsva(colorPaletteCard.hueVal, 1.0, 1.0, 1.0)
+                                    border.width: 2
+                                    border.color: "#ffffff"
+                                }
+
+                                MouseArea {
+                                    id: hueMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    preventStealing: true
+
+                                    function updateVal(mouse) {
+                                        var usable = hueTrackBox.width - hueThumb.width
+                                        if (usable <= 0) return
+                                        var rx = Math.max(0, Math.min(usable, mouse.x - hueThumb.width / 2))
+                                        colorPaletteCard.hueVal = rx / usable
+                                        colorPaletteCard.applyFromSliders()
+                                    }
+
+                                    onPressed: function(mouse) { updateVal(mouse) }
+                                    onPositionChanged: function(mouse) { if (pressed) updateVal(mouse) }
+                                }
+                            }
+
+                            Text {
+                                Layout.preferredWidth: Style.space(32)
+                                horizontalAlignment: Text.AlignRight
+                                text: Math.round(colorPaletteCard.hueVal * 360) + "°"
+                                font.family: Style.font.family
+                                font.pixelSize: Style.font.caption * 0.75
+                                color: root.fg
+                            }
+                        }
+
+                        // Saturation Slider (0% - 100%)
+                        RowLayout {
+                            width: parent.width
+                            spacing: Style.space(6)
+
+                            Text {
+                                Layout.preferredWidth: Style.space(24)
+                                text: "Sat"
+                                font.family: Style.font.family
+                                font.pixelSize: Style.font.caption * 0.75
+                                font.bold: true
+                                color: root.dim
+                            }
+
+                            Item {
+                                id: satTrackBox
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: Style.space(16)
+
+                                Rectangle {
+                                    id: satTrack
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    height: Style.space(10)
+                                    radius: Style.space(5)
+                                    border.width: 1
+                                    border.color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.2)
+                                    gradient: Gradient {
+                                        orientation: Gradient.Horizontal
+                                        GradientStop { position: 0.0; color: Qt.hsva(colorPaletteCard.hueVal, 0.0, colorPaletteCard.briVal, 1.0) }
+                                        GradientStop { position: 1.0; color: Qt.hsva(colorPaletteCard.hueVal, 1.0, colorPaletteCard.briVal, 1.0) }
+                                    }
+                                }
+
+                                Rectangle {
+                                    id: satThumb
+                                    width: Style.space(16)
+                                    height: Style.space(16)
+                                    radius: width / 2
+                                    x: Math.max(0, Math.min(satTrackBox.width - width, colorPaletteCard.satVal * (satTrackBox.width - width)))
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    color: Qt.hsva(colorPaletteCard.hueVal, colorPaletteCard.satVal, colorPaletteCard.briVal, 1.0)
+                                    border.width: 2
+                                    border.color: "#ffffff"
+                                }
+
+                                MouseArea {
+                                    id: satMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    preventStealing: true
+
+                                    function updateVal(mouse) {
+                                        var usable = satTrackBox.width - satThumb.width
+                                        if (usable <= 0) return
+                                        var rx = Math.max(0, Math.min(usable, mouse.x - satThumb.width / 2))
+                                        colorPaletteCard.satVal = rx / usable
+                                        colorPaletteCard.applyFromSliders()
+                                    }
+
+                                    onPressed: function(mouse) { updateVal(mouse) }
+                                    onPositionChanged: function(mouse) { if (pressed) updateVal(mouse) }
+                                }
+                            }
+
+                            Text {
+                                Layout.preferredWidth: Style.space(32)
+                                horizontalAlignment: Text.AlignRight
+                                text: Math.round(colorPaletteCard.satVal * 100) + "%"
+                                font.family: Style.font.family
+                                font.pixelSize: Style.font.caption * 0.75
+                                color: root.fg
+                            }
+                        }
+
+                        // Brightness Slider (0% - 100%)
+                        RowLayout {
+                            width: parent.width
+                            spacing: Style.space(6)
+
+                            Text {
+                                Layout.preferredWidth: Style.space(24)
+                                text: "Bri"
+                                font.family: Style.font.family
+                                font.pixelSize: Style.font.caption * 0.75
+                                font.bold: true
+                                color: root.dim
+                            }
+
+                            Item {
+                                id: briTrackBox
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: Style.space(16)
+
+                                Rectangle {
+                                    id: briTrack
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    height: Style.space(10)
+                                    radius: Style.space(5)
+                                    border.width: 1
+                                    border.color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.2)
+                                    gradient: Gradient {
+                                        orientation: Gradient.Horizontal
+                                        GradientStop { position: 0.0; color: "#000000" }
+                                        GradientStop { position: 1.0; color: Qt.hsva(colorPaletteCard.hueVal, colorPaletteCard.satVal, 1.0, 1.0) }
+                                    }
+                                }
+
+                                Rectangle {
+                                    id: briThumb
+                                    width: Style.space(16)
+                                    height: Style.space(16)
+                                    radius: width / 2
+                                    x: Math.max(0, Math.min(briTrackBox.width - width, colorPaletteCard.briVal * (briTrackBox.width - width)))
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    color: Qt.hsva(colorPaletteCard.hueVal, colorPaletteCard.satVal, colorPaletteCard.briVal, 1.0)
+                                    border.width: 2
+                                    border.color: "#ffffff"
+                                }
+
+                                MouseArea {
+                                    id: briMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    preventStealing: true
+
+                                    function updateVal(mouse) {
+                                        var usable = briTrackBox.width - briThumb.width
+                                        if (usable <= 0) return
+                                        var rx = Math.max(0, Math.min(usable, mouse.x - briThumb.width / 2))
+                                        colorPaletteCard.briVal = rx / usable
+                                        colorPaletteCard.applyFromSliders()
+                                    }
+
+                                    onPressed: function(mouse) { updateVal(mouse) }
+                                    onPositionChanged: function(mouse) { if (pressed) updateVal(mouse) }
+                                }
+                            }
+
+                            Text {
+                                Layout.preferredWidth: Style.space(32)
+                                horizontalAlignment: Text.AlignRight
+                                text: Math.round(colorPaletteCard.briVal * 100) + "%"
+                                font.family: Style.font.family
+                                font.pixelSize: Style.font.caption * 0.75
+                                color: root.fg
+                            }
+                        }
+
+                        Rectangle {
+                            width: parent.width
+                            height: 1
+                            color: root.hairline
+                        }
+
+                        // Bottom Row: Optional HEX field, 🎲 Random / Shuffle, and Auto button
                         RowLayout {
                             width: parent.width
                             spacing: Style.space(6)
@@ -2071,30 +2403,73 @@ Panel {
                             TextField {
                                 id: customHexInput
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: Style.space(24)
+                                Layout.preferredHeight: Style.space(26)
                                 foreground: root.fg
-                                placeholderText: "#HEX Code (e.g. #ff5500)"
+                                placeholderText: "#HEX (e.g. #3b82f6)"
                                 font.family: Style.font.family
                                 font.pixelSize: Style.font.caption * 0.85
                                 maximumLength: 7
+                                onTextChanged: {
+                                    if (colorPaletteCard.isSyncing) return
+                                    var h = text.trim()
+                                    if (h.indexOf("#") !== 0 && h.length > 0) h = "#" + h
+                                    if (Model.hexToRgb(h)) {
+                                        colorPaletteCard.isSyncing = true
+                                        var hsv = Model.hexToHsv(h)
+                                        colorPaletteCard.hueVal = hsv[0]
+                                        colorPaletteCard.satVal = hsv[1]
+                                        colorPaletteCard.briVal = hsv[2]
+                                        colorPaletteCard.applyColorToTarget(h)
+                                        colorPaletteCard.isSyncing = false
+                                    }
+                                }
                                 onAccepted: {
                                     var h = text.trim()
-                                    if (h.length >= 3) {
-                                        if (h.indexOf("#") !== 0) h = "#" + h
-                                        if (root.activeColorTarget === "__new__") root.newTagColor = h
-                                        else if (root.w) root.w.setTagColor(root.activeColorTarget, h)
-                                        text = ""
+                                    if (h.indexOf("#") !== 0 && h.length > 0) h = "#" + h
+                                    if (Model.hexToRgb(h)) {
+                                        colorPaletteCard.selectSwatch(h)
                                     }
                                 }
                             }
 
                             Rectangle {
-                                Layout.preferredHeight: Style.space(24)
+                                id: randomBtn
+                                Layout.preferredHeight: Style.space(26)
+                                Layout.preferredWidth: Style.space(30)
+                                radius: Style.space(5)
+                                color: randomMouse.containsMouse ? root.surfaceHover : root.surface
+                                border.width: 1
+                                border.color: randomMouse.containsMouse ? Color.accent : root.hairline
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "🎲"
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.caption
+                                }
+
+                                MouseArea {
+                                    id: randomMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: colorPaletteCard.pickRandomColor()
+                                }
+
+                                PanelToolTip {
+                                    visible: randomMouse.containsMouse
+                                    text: "Random color (🎲)"
+                                }
+                            }
+
+                            Rectangle {
+                                id: autoBtn
+                                Layout.preferredHeight: Style.space(26)
                                 Layout.preferredWidth: Style.space(42)
                                 radius: Style.space(5)
                                 color: autoBtnMouse.containsMouse ? root.surfaceHover : root.surface
                                 border.width: 1
-                                border.color: root.hairline
+                                border.color: autoBtnMouse.containsMouse ? Color.accent : root.hairline
 
                                 Text {
                                     anchors.centerIn: parent
@@ -2109,13 +2484,7 @@ Panel {
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        if (root.activeColorTarget === "__new__") {
-                                            root.newTagColor = ""
-                                        } else if (root.w) {
-                                            root.w.setTagColor(root.activeColorTarget, "")
-                                        }
-                                    }
+                                    onClicked: colorPaletteCard.setAutoColor()
                                 }
 
                                 PanelToolTip {
