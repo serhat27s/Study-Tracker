@@ -29,9 +29,9 @@ Panel {
     property var hoveredCell: null
     property int heatmapYear: new Date().getFullYear()
 
-    // Feste Panelgröße – angepasst auf Ganzjahres-Aktivitätsgrid (Januar bis Dezember)
-    readonly property int panelWidth: Style.space(840)
-    readonly property int panelInnerHeight: Style.space(580)
+    // Feste Panelgröße – 420x560 kompakter Standard
+    readonly property int panelWidth: Style.space(420)
+    readonly property int panelInnerHeight: Style.space(560)
 
     readonly property color fg: root.barForeground
     readonly property color dim: Qt.darker(fg, 1.5)
@@ -59,7 +59,7 @@ Panel {
 
     readonly property var heatmapData: w
         ? Model.buildHeatmap(w.history, root.heatmapYear)
-        : { year: root.heatmapYear, weeks: [], totalSeconds: 0, yearHours: "0.0 Std.", todayHours: "0.0 Std.", totalHours: "0.0 Std.", streakDays: 0, sessionCount: 0 }
+        : { year: root.heatmapYear, weeks: [], numWeeks: 0, todayWeekIndex: 0, totalSeconds: 0, yearHours: "0.0 Std.", todayHours: "0.0 Std.", totalHours: "0.0 Std.", streakDays: 0, sessionCount: 0 }
 
     readonly property var tagStatsData: w
         ? Model.aggregateTagStats(w.history, root.tagStatsScope)
@@ -87,13 +87,35 @@ Panel {
         return 1500
     }
 
+    function scrollToCurrent() {
+        if (typeof heatmapFlick === "undefined" || !heatmapFlick) return
+        var colW = Style.space(11) + Style.space(3)
+        var totalCols = (root.heatmapData && root.heatmapData.weeks) ? root.heatmapData.weeks.length : 53
+        var todayIdx = (root.heatmapData && typeof root.heatmapData.todayWeekIndex === "number") ? root.heatmapData.todayWeekIndex : -1
+        if (todayIdx < 0) {
+            todayIdx = Math.min(totalCols - 1, 40)
+        }
+        var flickW = heatmapFlick.width
+        var totalW = totalCols * colW
+        var maxX = Math.max(0, totalW - flickW)
+        // Ansicht auf die letzten ~3 Monate bis heute zentrieren (heute am rechten Rand des sichtbaren Bereichs)
+        var targetX = Math.round((todayIdx + 1.5) * colW - flickW)
+        heatmapFlick.contentX = Math.max(0, Math.min(maxX, targetX))
+    }
+
+    onHeatmapYearChanged: Qt.callLater(root.scrollToCurrent)
+
     onOpenedChanged: {
-        if (root.opened && w) w.refreshUptime()
+        if (root.opened) {
+            if (w) w.refreshUptime()
+            Qt.callLater(root.scrollToCurrent)
+        }
     }
 
     function open() {
         if (w) w.refreshUptime()
         root.controller.show()
+        Qt.callLater(root.scrollToCurrent)
     }
     function close() {
         root.tagMenuOpen = false
@@ -110,6 +132,7 @@ Panel {
         root.closeTagMenu()
         if (i === 2 && w) w.refreshUptime()
         root.currentTab = i
+        if (i === 0) Qt.callLater(root.scrollToCurrent)
     }
 
     function openTagMenu() {
@@ -294,8 +317,7 @@ Panel {
                 // Tab-Leiste
                 // -------------------------------------------------------------
                 Segmented {
-                    Layout.alignment: Qt.AlignHCenter
-                    Layout.preferredWidth: Style.space(480)
+                    Layout.fillWidth: true
                     Layout.preferredHeight: Style.space(30)
                     fg: root.fg
                     fontSize: Style.font.bodySmall
@@ -500,8 +522,7 @@ Panel {
 
                                     // Phasen-Auswahl (Pomodoro) mit Einstellungs-Button bzw. Info-Zeile (Stoppuhr)
                                     RowLayout {
-                                        anchors.horizontalCenter: parent.horizontalCenter
-                                        width: Math.min(parent.width, Style.space(480))
+                                        width: parent.width
                                         visible: root.isPomodoro
                                         spacing: Style.space(6)
 
@@ -779,8 +800,7 @@ Panel {
 
                                     // Steuerung
                                     RowLayout {
-                                        anchors.horizontalCenter: parent.horizontalCenter
-                                        width: Math.min(parent.width, Style.space(340))
+                                        width: parent.width
                                         spacing: Style.space(8)
 
                                         // Primärer Start/Pause-Button
@@ -860,7 +880,7 @@ Panel {
                                 }
                             }
 
-                            // ---------------- Aktivitätsgraph (52 Wochen — Ganzes Jahr) ----------------
+                            // ---------------- Aktivitätsgraph (52-53 Wochen mit horizontalem Scrollen) ----------------
                             Rectangle {
                                 width: parent.width
                                 implicitHeight: heatmapSectionCol.implicitHeight + Style.space(24)
@@ -880,20 +900,96 @@ Panel {
                                     RowLayout {
                                         width: parent.width
 
-                                        SectionLabel {
-                                            fg: root.fg
-                                            text: "AKTIVITÄT " + root.heatmapYear + " (JANUAR — DEZEMBER)"
+                                        Row {
+                                            spacing: Style.space(4)
+
+                                            SectionLabel {
+                                                fg: root.fg
+                                                text: "AKTIVITÄT " + root.heatmapYear
+                                            }
+
+                                            // Jahr-Umschalter
+                                            Rectangle {
+                                                width: Style.space(18)
+                                                height: Style.space(18)
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                radius: Style.space(3)
+                                                color: prevYearMouse.containsMouse ? root.surfaceHover : "transparent"
+                                                border.width: 1
+                                                border.color: root.hairline
+
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: "‹"
+                                                    font.family: Style.font.family
+                                                    font.pixelSize: Style.font.caption
+                                                    font.bold: true
+                                                    color: root.dim
+                                                }
+
+                                                MouseArea {
+                                                    id: prevYearMouse
+                                                    anchors.fill: parent
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: {
+                                                        root.heatmapYear--
+                                                        Qt.callLater(root.scrollToCurrent)
+                                                    }
+                                                }
+
+                                                PanelToolTip {
+                                                    visible: prevYearMouse.containsMouse
+                                                    text: "Vorheriges Jahr (" + (root.heatmapYear - 1) + ")"
+                                                }
+                                            }
+
+                                            Rectangle {
+                                                width: Style.space(18)
+                                                height: Style.space(18)
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                radius: Style.space(3)
+                                                color: nextYearMouse.containsMouse ? root.surfaceHover : "transparent"
+                                                border.width: 1
+                                                border.color: root.hairline
+                                                opacity: root.heatmapYear >= new Date().getFullYear() ? 0.35 : 1.0
+
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: "›"
+                                                    font.family: Style.font.family
+                                                    font.pixelSize: Style.font.caption
+                                                    font.bold: true
+                                                    color: root.dim
+                                                }
+
+                                                MouseArea {
+                                                    id: nextYearMouse
+                                                    anchors.fill: parent
+                                                    enabled: root.heatmapYear < new Date().getFullYear()
+                                                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                    onClicked: {
+                                                        root.heatmapYear++
+                                                        Qt.callLater(root.scrollToCurrent)
+                                                    }
+                                                }
+
+                                                PanelToolTip {
+                                                    visible: nextYearMouse.containsMouse
+                                                    text: "Nächstes Jahr (" + (root.heatmapYear + 1) + ")"
+                                                }
+                                            }
                                         }
 
-                                        // Jahr-Umschalter
+                                        // Navigation: Monate scrollen & Heute
                                         Row {
-                                            spacing: Style.space(2)
+                                            spacing: Style.space(3)
 
+                                            // Nach links (frühere Monate)
                                             Rectangle {
                                                 width: Style.space(20)
                                                 height: Style.space(20)
                                                 radius: Style.space(4)
-                                                color: prevYearMouse.containsMouse ? root.surfaceHover : "transparent"
+                                                color: scrollLeftMouse.containsMouse ? root.surfaceHover : "transparent"
                                                 border.width: 1
                                                 border.color: root.hairline
 
@@ -906,26 +1002,31 @@ Panel {
                                                 }
 
                                                 MouseArea {
-                                                    id: prevYearMouse
+                                                    id: scrollLeftMouse
                                                     anchors.fill: parent
                                                     cursorShape: Qt.PointingHandCursor
-                                                    onClicked: root.heatmapYear--
+                                                    onClicked: {
+                                                        if (heatmapFlick) {
+                                                            var step = (Style.space(11) + Style.space(3)) * 4
+                                                            heatmapFlick.contentX = Math.max(0, heatmapFlick.contentX - step)
+                                                        }
+                                                    }
                                                 }
 
                                                 PanelToolTip {
-                                                    visible: prevYearMouse.containsMouse
-                                                    text: "Vorheriges Jahr (" + (root.heatmapYear - 1) + ")"
+                                                    visible: scrollLeftMouse.containsMouse
+                                                    text: "Frühere Monate anzeigen"
                                                 }
                                             }
 
+                                            // Nach rechts (spätere Monate)
                                             Rectangle {
                                                 width: Style.space(20)
                                                 height: Style.space(20)
                                                 radius: Style.space(4)
-                                                color: nextYearMouse.containsMouse ? root.surfaceHover : "transparent"
+                                                color: scrollRightMouse.containsMouse ? root.surfaceHover : "transparent"
                                                 border.width: 1
                                                 border.color: root.hairline
-                                                opacity: root.heatmapYear >= new Date().getFullYear() ? 0.35 : 1.0
 
                                                 Text {
                                                     anchors.centerIn: parent
@@ -936,16 +1037,57 @@ Panel {
                                                 }
 
                                                 MouseArea {
-                                                    id: nextYearMouse
+                                                    id: scrollRightMouse
                                                     anchors.fill: parent
-                                                    enabled: root.heatmapYear < new Date().getFullYear()
-                                                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                                    onClicked: root.heatmapYear++
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: {
+                                                        if (heatmapFlick) {
+                                                            var step = (Style.space(11) + Style.space(3)) * 4
+                                                            var maxX = Math.max(0, heatmapFlick.contentWidth - heatmapFlick.width)
+                                                            heatmapFlick.contentX = Math.min(maxX, heatmapFlick.contentX + step)
+                                                        }
+                                                    }
                                                 }
 
                                                 PanelToolTip {
-                                                    visible: nextYearMouse.containsMouse
-                                                    text: "Nächstes Jahr (" + (root.heatmapYear + 1) + ")"
+                                                    visible: scrollRightMouse.containsMouse
+                                                    text: "Spätere Monate anzeigen"
+                                                }
+                                            }
+
+                                            // Heute-Button
+                                            Rectangle {
+                                                height: Style.space(20)
+                                                implicitWidth: heuteLabel.implicitWidth + Style.space(10)
+                                                radius: Style.space(4)
+                                                color: heuteMouse.containsMouse ? root.surfaceHover : "transparent"
+                                                border.width: 1
+                                                border.color: root.hairline
+
+                                                Text {
+                                                    id: heuteLabel
+                                                    anchors.centerIn: parent
+                                                    text: "Heute"
+                                                    font.family: Style.font.family
+                                                    font.pixelSize: Style.font.caption * 0.82
+                                                    color: root.fg
+                                                }
+
+                                                MouseArea {
+                                                    id: heuteMouse
+                                                    anchors.fill: parent
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: {
+                                                        if (root.heatmapYear !== new Date().getFullYear()) {
+                                                            root.heatmapYear = new Date().getFullYear()
+                                                        }
+                                                        root.scrollToCurrent()
+                                                    }
+                                                }
+
+                                                PanelToolTip {
+                                                    visible: heuteMouse.containsMouse
+                                                    text: "Zu aktuellen Monaten / Heute springen"
                                                 }
                                             }
                                         }
@@ -961,13 +1103,14 @@ Panel {
                                         }
                                     }
 
-                                    // Kalenderjahr-Grid (Januar bis Dezember auf einen Blick, ohne Scrollen)
+                                    // Kalenderjahr-Grid (Januar bis Dezember mit horizontalem Scrollen)
                                     Row {
-                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        width: parent.width
                                         spacing: Style.space(6)
 
                                         // Wochentage links (Mo, Mi, Fr, So)
                                         Column {
+                                            id: weekdayCol
                                             y: Style.space(15) // Offset für Monatsleiste oben
                                             spacing: Style.space(3)
 
@@ -985,67 +1128,100 @@ Panel {
                                             }
                                         }
 
-                                        // Kalenderwochen des Jahres
-                                        Column {
-                                            spacing: Style.space(3)
+                                        // Scrollbarer Bereich für alle Kalenderwochen des Jahres
+                                        Flickable {
+                                            id: heatmapFlick
+                                            width: parent.width - weekdayCol.width - Style.space(6)
+                                            height: heatmapWeeksCol.implicitHeight + Style.space(6)
+                                            clip: true
+                                            contentWidth: Math.max(heatmapWeeksCol.implicitWidth, (Style.space(11) + Style.space(3)) * (root.heatmapData.weeks ? root.heatmapData.weeks.length : 53))
+                                            contentHeight: height
+                                            boundsBehavior: Flickable.StopAtBounds
+                                            flickableDirection: Flickable.HorizontalFlick
 
-                                            // Monatsbeschriftung oben (Jan bis Dez)
-                                            Row {
-                                                spacing: Style.space(3)
+                                            ScrollBar.horizontal: ScrollBar {
+                                                policy: ScrollBar.AsNeeded
+                                            }
 
-                                                Repeater {
-                                                    model: root.heatmapData.weeks
-
-                                                    Item {
-                                                        width: Style.space(11)
-                                                        height: Style.space(12)
-
-                                                        Text {
-                                                            visible: modelData[0] && modelData[0].monthLabel && modelData[0].monthLabel.length > 0
-                                                            text: modelData[0] ? (modelData[0].monthLabel || "") : ""
-                                                            font.family: Style.font.family
-                                                            font.pixelSize: Style.font.caption * 0.75
-                                                            color: root.faint
-                                                        }
+                                            WheelHandler {
+                                                target: null
+                                                acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                                                onWheel: function(event) {
+                                                    var delta = event.angleDelta.y !== 0 ? event.angleDelta.y : event.angleDelta.x
+                                                    if (delta !== 0) {
+                                                        var step = -delta * 0.5
+                                                        var newX = heatmapFlick.contentX + step
+                                                        var maxX = Math.max(0, heatmapFlick.contentWidth - heatmapFlick.width)
+                                                        heatmapFlick.contentX = Math.max(0, Math.min(maxX, newX))
+                                                        event.accepted = true
                                                     }
                                                 }
                                             }
 
-                                            // Wochenspalten
-                                            Row {
+                                            Component.onCompleted: Qt.callLater(root.scrollToCurrent)
+
+                                            Column {
+                                                id: heatmapWeeksCol
                                                 spacing: Style.space(3)
 
-                                                Repeater {
-                                                    model: root.heatmapData.weeks
+                                                // Monatsbeschriftung oben (Jan bis Dez)
+                                                Row {
+                                                    spacing: Style.space(3)
 
-                                                    Column {
-                                                        spacing: Style.space(3)
+                                                    Repeater {
+                                                        model: root.heatmapData.weeks
 
-                                                        Repeater {
-                                                            model: modelData
+                                                        Item {
+                                                            width: Style.space(11)
+                                                            height: Style.space(12)
 
-                                                            Rectangle {
-                                                                width: Style.space(11)
-                                                                height: Style.space(11)
-                                                                radius: Style.space(2)
-                                                                color: {
-                                                                    if (modelData.isOutsideYear) return "transparent"
-                                                                    if (modelData.level === 4) return Color.accent
-                                                                    if (modelData.level === 3) return Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.75)
-                                                                    if (modelData.level === 2) return Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.50)
-                                                                    if (modelData.level === 1) return Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.25)
-                                                                    if (modelData.isFuture) return Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.04)
-                                                                    return Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.08)
-                                                                }
-                                                                border.width: (modelData.isToday || cellMouse.containsMouse) ? 1 : 0
-                                                                border.color: cellMouse.containsMouse ? root.fg : Color.accent
+                                                            Text {
+                                                                visible: modelData[0] && modelData[0].monthLabel && modelData[0].monthLabel.length > 0
+                                                                text: modelData[0] ? (modelData[0].monthLabel || "") : ""
+                                                                font.family: Style.font.family
+                                                                font.pixelSize: Style.font.caption * 0.75
+                                                                color: root.faint
+                                                            }
+                                                        }
+                                                    }
+                                                }
 
-                                                                MouseArea {
-                                                                    id: cellMouse
-                                                                    anchors.fill: parent
-                                                                    hoverEnabled: !modelData.isOutsideYear
-                                                                    onEntered: root.hoveredCell = modelData
-                                                                    onExited: if (root.hoveredCell === modelData) root.hoveredCell = null
+                                                // Wochenspalten
+                                                Row {
+                                                    spacing: Style.space(3)
+
+                                                    Repeater {
+                                                        model: root.heatmapData.weeks
+
+                                                        Column {
+                                                            spacing: Style.space(3)
+
+                                                            Repeater {
+                                                                model: modelData
+
+                                                                Rectangle {
+                                                                    width: Style.space(11)
+                                                                    height: Style.space(11)
+                                                                    radius: Style.space(2)
+                                                                    color: {
+                                                                        if (modelData.isOutsideYear) return "transparent"
+                                                                        if (modelData.level === 4) return Color.accent
+                                                                        if (modelData.level === 3) return Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.75)
+                                                                        if (modelData.level === 2) return Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.50)
+                                                                        if (modelData.level === 1) return Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.25)
+                                                                        if (modelData.isFuture) return Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.04)
+                                                                        return Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.08)
+                                                                    }
+                                                                    border.width: (modelData.isToday || cellMouse.containsMouse) ? 1 : 0
+                                                                    border.color: cellMouse.containsMouse ? root.fg : Color.accent
+
+                                                                    MouseArea {
+                                                                        id: cellMouse
+                                                                        anchors.fill: parent
+                                                                        hoverEnabled: !modelData.isOutsideYear
+                                                                        onEntered: root.hoveredCell = modelData
+                                                                        onExited: if (root.hoveredCell === modelData) root.hoveredCell = null
+                                                                    }
                                                                 }
                                                             }
                                                         }

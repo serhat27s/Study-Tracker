@@ -189,6 +189,7 @@ function buildHeatmap(history, year) {
     var yearSecondsLogged = 0;
     var totalSecondsLogged = 0;
     var todaySeconds = (dayMap[todayDk] ? dayMap[todayDk].totalSeconds : 0);
+    var todayWeekIndex = -1;
 
     for (var w = 0; w < numWeeks; w++) {
         var days = [];
@@ -202,6 +203,10 @@ function buildHeatmap(history, year) {
             var info = dayMap[dk] || { totalSeconds: 0, tags: {} };
             var sec = info.totalSeconds;
             var mins = Math.round(sec / 60);
+
+            if (isToday) {
+                todayWeekIndex = w;
+            }
 
             if (!isOutsideYear) {
                 yearSecondsLogged += sec;
@@ -270,6 +275,8 @@ function buildHeatmap(history, year) {
     return {
         year: targetYear,
         weeks: weeks,
+        numWeeks: numWeeks,
+        todayWeekIndex: (todayWeekIndex >= 0 ? todayWeekIndex : (targetYear < today.getFullYear() ? (numWeeks - 1) : 0)),
         totalSeconds: totalSecondsLogged,
         yearSeconds: yearSecondsLogged,
         todaySeconds: todaySeconds,
