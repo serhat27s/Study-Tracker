@@ -495,7 +495,7 @@ BarWidget {
         bar: root.bar
         text: {
             if (!root.isRunning) {
-                return root.activeMode === "pomodoro" ? "󰔟" : "󱎫"
+                return "\uf19d"
             }
             return (root.activeMode === "pomodoro" ? "󰄉 " : "󰔛 ") + root.formattedTime() + " · 🏷️ " + root.activeTag
         }
