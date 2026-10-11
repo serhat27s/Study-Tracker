@@ -1807,13 +1807,29 @@ Panel {
                             readonly property bool sel: modelData === root.activeTag
                             readonly property color tagCol: root.colorForTag(modelData)
                             readonly property bool isColorTarget: root.activeColorTarget === modelData
+                            readonly property bool isHovered: rowHover.hovered || rowMouse.containsMouse || dotMouse.containsMouse || palIconMouse.containsMouse || trashMouse.containsMouse
                             width: tagMenuList.width
                             height: tagMenuList.rowH
                             radius: Style.space(6)
                             color: isColorTarget
                                 ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.22)
                                 : (sel ? Qt.rgba(tagCol.r, tagCol.g, tagCol.b, 0.18)
-                                       : (rowMouse.containsMouse ? root.surfaceHover : "transparent"))
+                                       : (tagRowItem.isHovered ? root.surfaceHover : "transparent"))
+
+                            HoverHandler {
+                                id: rowHover
+                            }
+
+                            MouseArea {
+                                id: rowMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    if (root.w) root.w.activeTag = modelData
+                                    root.closeTagMenu()
+                                }
+                            }
 
                             RowLayout {
                                 anchors.fill: parent
@@ -1861,7 +1877,7 @@ Panel {
                                 // Color palette icon
                                 Text {
                                     id: tagPalIcon
-                                    visible: isColorTarget || rowMouse.containsMouse
+                                    visible: isColorTarget || tagRowItem.isHovered
                                     text: "󰏘"
                                     font.family: Style.font.family
                                     font.pixelSize: Style.font.caption
@@ -1886,7 +1902,7 @@ Panel {
 
                                 // Checkmark when active
                                 Text {
-                                    visible: sel && !rowMouse.containsMouse && !isColorTarget
+                                    visible: sel && !tagRowItem.isHovered && !isColorTarget
                                     text: "󰄬"
                                     font.family: Style.font.family
                                     font.pixelSize: Style.font.caption
@@ -1895,7 +1911,7 @@ Panel {
 
                                 // Trash icon
                                 Text {
-                                    visible: rowMouse.containsMouse
+                                    visible: tagRowItem.isHovered
                                     text: "󰆴"
                                     font.family: Style.font.family
                                     font.pixelSize: Style.font.caption
@@ -1917,19 +1933,6 @@ Panel {
                                         visible: trashMouse.containsMouse
                                         text: "Delete subject"
                                     }
-                                }
-                            }
-
-                            MouseArea {
-                                id: rowMouse
-                                anchors.fill: parent
-                                anchors.leftMargin: Style.space(20)
-                                anchors.rightMargin: Style.space(44)
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    if (root.w) root.w.activeTag = modelData
-                                    root.closeTagMenu()
                                 }
                             }
                         }
