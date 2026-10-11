@@ -628,15 +628,15 @@ Panel {
 
                                                 Repeater {
                                                     model: [
-                                                        { label: "25 / 5", work: 25, short: 5, long: 15, tip: "Klassisch (25m Fokus, 5m Pause)" },
-                                                        { label: "50 / 10", work: 50, short: 10, long: 20, tip: "Deep Work (50m Fokus, 10m Pause)" },
-                                                        { label: "45 / 15", work: 45, short: 15, long: 30, tip: "Vorlesung / Sprint (45m Fokus, 15m Pause)" },
-                                                        { label: "20 / 5", work: 20, short: 5, long: 10, tip: "Kurz (20m Fokus, 5m Pause)" }
+                                                        { name: "Standard", times: "25 / 5 / 15", work: 25, short: 5, long: 15, tip: "Standard: 25m Fokus, 5m Pause, 15m Lange Pause" },
+                                                        { name: "Deep Work", times: "50 / 10 / 30", work: 50, short: 10, long: 30, tip: "Deep Work: 50m Fokus, 10m Pause, 30m Lange Pause" },
+                                                        { name: "Ultradian", times: "90 / 20", work: 90, short: 20, long: 30, tip: "Ultradian: 90m Fokus, 20m Pause" }
                                                     ]
 
                                                     Rectangle {
-                                                        width: (parent.width - Style.space(12)) / 4
-                                                        height: Style.space(24)
+                                                        id: presetCard
+                                                        width: (parent.width - Style.space(8)) / 3
+                                                        height: Style.space(32)
                                                         radius: Style.space(6)
                                                         readonly property bool isCurrent: root.w
                                                             && Math.round(root.w.pomodoroWorkDuration / 60) === modelData.work
@@ -647,13 +647,26 @@ Panel {
                                                         border.width: 1
                                                         border.color: isCurrent ? Color.accent : root.hairline
 
-                                                        Text {
+                                                        Column {
                                                             anchors.centerIn: parent
-                                                            text: modelData.label
-                                                            font.family: Style.font.family
-                                                            font.pixelSize: Style.font.caption * 0.85
-                                                            font.bold: parent.isCurrent
-                                                            color: parent.isCurrent ? Color.accent : root.fg
+                                                            spacing: Style.space(1)
+
+                                                            Text {
+                                                                anchors.horizontalCenter: parent.horizontalCenter
+                                                                text: modelData.name
+                                                                font.family: Style.font.family
+                                                                font.pixelSize: Style.font.caption * 0.85
+                                                                font.bold: true
+                                                                color: presetCard.isCurrent ? Color.accent : root.fg
+                                                            }
+
+                                                            Text {
+                                                                anchors.horizontalCenter: parent.horizontalCenter
+                                                                text: modelData.times
+                                                                font.family: Style.font.family
+                                                                font.pixelSize: Style.font.caption * 0.72
+                                                                color: presetCard.isCurrent ? Color.accent : root.dim
+                                                            }
                                                         }
 
                                                         MouseArea {
