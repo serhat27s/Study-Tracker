@@ -1148,9 +1148,9 @@ Panel {
                                             ScrollBar.horizontal: ScrollBar {
                                                 id: heatmapScrollBar
                                                 policy: ScrollBar.AsNeeded
-                                                implicitHeight: Style.space(5)
+                                                implicitHeight: Style.space(6)
                                                 contentItem: Rectangle {
-                                                    implicitHeight: Style.space(3.5)
+                                                    implicitHeight: Style.space(4)
                                                     radius: height / 2
                                                     color: heatmapScrollBar.pressed
                                                         ? Color.accent
@@ -1158,7 +1158,7 @@ Panel {
                                                     Behavior on color { ColorAnimation { duration: 150 } }
                                                 }
                                                 background: Item {
-                                                    implicitHeight: Style.space(5)
+                                                    implicitHeight: Style.space(6)
                                                 }
                                             }
 
