@@ -900,84 +900,9 @@ Panel {
                                     RowLayout {
                                         width: parent.width
 
-                                        Row {
-                                            spacing: Style.space(4)
-
-                                            SectionLabel {
-                                                fg: root.fg
-                                                text: "AKTIVITÄT " + root.heatmapYear
-                                            }
-
-                                            // Jahr-Umschalter
-                                            Rectangle {
-                                                width: Style.space(18)
-                                                height: Style.space(18)
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                radius: Style.space(3)
-                                                color: prevYearMouse.containsMouse ? root.surfaceHover : "transparent"
-                                                border.width: 1
-                                                border.color: root.hairline
-
-                                                Text {
-                                                    anchors.centerIn: parent
-                                                    text: "‹"
-                                                    font.family: Style.font.family
-                                                    font.pixelSize: Style.font.caption
-                                                    font.bold: true
-                                                    color: root.dim
-                                                }
-
-                                                MouseArea {
-                                                    id: prevYearMouse
-                                                    anchors.fill: parent
-                                                    cursorShape: Qt.PointingHandCursor
-                                                    onClicked: {
-                                                        root.heatmapYear--
-                                                        Qt.callLater(root.scrollToCurrent)
-                                                    }
-                                                }
-
-                                                PanelToolTip {
-                                                    visible: prevYearMouse.containsMouse
-                                                    text: "Vorheriges Jahr (" + (root.heatmapYear - 1) + ")"
-                                                }
-                                            }
-
-                                            Rectangle {
-                                                width: Style.space(18)
-                                                height: Style.space(18)
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                radius: Style.space(3)
-                                                color: nextYearMouse.containsMouse ? root.surfaceHover : "transparent"
-                                                border.width: 1
-                                                border.color: root.hairline
-                                                opacity: root.heatmapYear >= new Date().getFullYear() ? 0.35 : 1.0
-
-                                                Text {
-                                                    anchors.centerIn: parent
-                                                    text: "›"
-                                                    font.family: Style.font.family
-                                                    font.pixelSize: Style.font.caption
-                                                    font.bold: true
-                                                    color: root.dim
-                                                }
-
-                                                MouseArea {
-                                                    id: nextYearMouse
-                                                    anchors.fill: parent
-                                                    enabled: root.heatmapYear < new Date().getFullYear()
-                                                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                                    onClicked: {
-                                                        root.heatmapYear++
-                                                        Qt.callLater(root.scrollToCurrent)
-                                                    }
-                                                }
-
-                                                PanelToolTip {
-                                                    visible: nextYearMouse.containsMouse
-                                                    text: "Nächstes Jahr (" + (root.heatmapYear + 1) + ")"
-                                                }
-                                            }
+                                        SectionLabel {
+                                            fg: root.fg
+                                            text: "AKTIVITÄT " + root.heatmapYear
                                         }
 
                                         // Navigation: Monate scrollen & Heute
@@ -1231,34 +1156,13 @@ Panel {
                                         }
                                     }
 
-                                    // Info-Zeile + Legende
+                                    // Legende unten rechts (unten links frei)
                                     RowLayout {
                                         width: parent.width
                                         height: Style.space(18)
                                         spacing: Style.space(8)
 
-                                        Text {
-                                            Layout.fillWidth: true
-                                            elide: Text.ElideRight
-                                            text: {
-                                                var c = root.hoveredCell
-                                                if (c) {
-                                                    var s = c.dateStr
-                                                    if (c.isFuture) s += " · Zukünftiger Tag"
-                                                    else if (c.totalSeconds > 0) {
-                                                        s += " · " + c.focusTimeStr
-                                                        if (c.dominantTags && c.dominantTags.length > 0) s += " · " + c.dominantTags
-                                                    } else {
-                                                        s += " · Keine Aktivität"
-                                                    }
-                                                    return s
-                                                }
-                                                return root.heatmapData.year + ": " + root.heatmapData.yearHours + " gelernt · Heute " + root.heatmapData.todayHours
-                                            }
-                                            font.family: Style.font.family
-                                            font.pixelSize: Style.font.caption
-                                            color: root.hoveredCell ? root.fg : root.dim
-                                        }
+                                        Item { Layout.fillWidth: true }
 
                                         Row {
                                             spacing: Style.space(3)
