@@ -489,11 +489,22 @@ BarWidget {
         }
     }
 
+    // Study icon for bar button (Graduation Cap / nf-md-school)
+    readonly property string studyIcon: "󰙛"
+
     WidgetButton {
         id: button
         anchors.fill: parent
         bar: root.bar
-        text: (root.isRunning ? (root.activeMode === "pomodoro" ? "󰄉 " : "󰔛 ") : (root.activeMode === "pomodoro" ? "󰔟 " : "󱎫 ")) + root.formattedTime() + " · 🏷️ " + root.activeTag
+        text: {
+            if (!root.isRunning) {
+                return root.studyIcon
+            }
+            if (root.activeMode === "pomodoro" && root.pomodoroPhase !== "work") {
+                return "☕ " + root.formattedTime() + " · Break"
+            }
+            return root.studyIcon + " " + root.formattedTime() + " · 🏷️ " + root.activeTag
+        }
         tooltipText: "Study Tracker (" + (root.activeMode === "pomodoro" ? (root.pomodoroPhase === "work" ? "Pomodoro" : "Break") : "Stopwatch") + ") — Click: Open panel, Right-click: " + (root.isRunning ? "Pause" : "Start")
         onPressed: function(buttonCode) {
             if (buttonCode === Qt.LeftButton) root.toggle()
