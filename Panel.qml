@@ -165,6 +165,7 @@ Panel {
 
     function setTab(i) {
         root.closeTagMenu()
+        root.hoveredCell = null
         if (i === 2 && w) w.refreshUptime()
         root.currentTab = i
         if (i === 0) Qt.callLater(root.scrollToCurrent)
@@ -343,6 +344,59 @@ Panel {
         font.bold: true
         font.letterSpacing: 0.6
         color: Qt.darker(fg, 1.5)
+    }
+
+    // Wiederverwendbarer Empty State
+    component EmptyState: Column {
+        id: es
+        property string icon: "󰄨"
+        property string title: ""
+        property string description: ""
+        property color fg: root.fg
+        property color dimColor: root.dim
+
+        spacing: Style.space(8)
+        width: parent ? Math.min(parent.width - Style.space(32), Style.space(280)) : Style.space(260)
+
+        Rectangle {
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: Style.space(46)
+            height: Style.space(46)
+            radius: width / 2
+            color: Qt.rgba(es.fg.r, es.fg.g, es.fg.b, 0.05)
+            border.width: 1
+            border.color: root.hairline
+
+            Text {
+                anchors.centerIn: parent
+                text: es.icon
+                font.family: Style.font.family
+                font.pixelSize: Style.font.iconLarge * 1.25
+                color: es.dimColor
+            }
+        }
+
+        Text {
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.WordWrap
+            text: es.title
+            font.family: Style.font.family
+            font.pixelSize: Style.font.bodySmall
+            font.bold: true
+            color: es.fg
+        }
+
+        Text {
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.WordWrap
+            text: es.description
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+            lineHeight: 1.25
+            color: es.dimColor
+        }
     }
 
     // =========================================================================
@@ -1173,6 +1227,12 @@ Panel {
                                                                         hoverEnabled: !modelData.isOutsideYear
                                                                         onEntered: root.hoveredCell = modelData
                                                                         onExited: if (root.hoveredCell === modelData) root.hoveredCell = null
+
+                                                                        PanelToolTip {
+                                                                            visible: cellMouse.containsMouse && !modelData.isOutsideYear
+                                                                            delay: 150
+                                                                            text: (modelData.isToday ? (modelData.dateStr + " (Today)") : modelData.dateStr) + " · " + (modelData.totalSeconds > 0 ? modelData.focusTimeStr : "No study time")
+                                                                        }
                                                                     }
                                                                 }
                                                             }
@@ -1189,7 +1249,24 @@ Panel {
                                         height: Style.space(18)
                                         spacing: Style.space(8)
 
-                                        Item { Layout.fillWidth: true }
+                                        // Hover readout: Date & study time
+                                        Text {
+                                            Layout.fillWidth: true
+                                            elide: Text.ElideRight
+                                            visible: Boolean(root.hoveredCell && !root.hoveredCell.isOutsideYear)
+                                            text: root.hoveredCell
+                                                ? ((root.hoveredCell.isToday ? (root.hoveredCell.dateStr + " (Today)") : root.hoveredCell.dateStr) + ": " + (root.hoveredCell.totalSeconds > 0 ? root.hoveredCell.focusTimeStr : "No study time"))
+                                                : ""
+                                            font.family: Style.font.family
+                                            font.pixelSize: Style.font.caption * 0.85
+                                            font.bold: true
+                                            color: root.fg
+                                        }
+
+                                        Item {
+                                            Layout.fillWidth: true
+                                            visible: !Boolean(root.hoveredCell && !root.hoveredCell.isOutsideYear)
+                                        }
 
                                         Row {
                                             spacing: Style.space(3)
@@ -1384,13 +1461,14 @@ Panel {
                                 }
                             }
 
-                            Text {
+                            EmptyState {
                                 anchors.centerIn: parent
                                 visible: tagList.count === 0
-                                text: "No study time logged in this period"
-                                font.family: Style.font.family
-                                font.pixelSize: Style.font.caption
-                                color: root.dim
+                                icon: "󰄨"
+                                title: root.heatmapData.totalSeconds === 0 ? "No Study Activity Yet" : "No Sessions in This Period"
+                                description: root.heatmapData.totalSeconds === 0
+                                    ? "Start a focus timer or stopwatch in the Focus tab to begin tracking subject statistics."
+                                    : "No study sessions were logged during the selected timeframe (" + (root.tagStatsScope === "today" ? "Today" : (root.tagStatsScope === "week" ? "Last 7 Days" : "Total")) + ")."
                             }
                         }
                     }
@@ -1634,27 +1712,18 @@ Panel {
                                 }
                             }
 
-                            Column {
+                            EmptyState {
                                 anchors.centerIn: parent
                                 visible: appList.count === 0
-                                spacing: Style.space(4)
-
-                                Text {
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    text: "󰄶"
-                                    font.family: Style.font.family
-                                    font.pixelSize: Style.font.display
-                                    color: root.faint
-                                }
-                                Text {
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    text: root.appScope === "current"
-                                        ? "Start the timer to track applications"
-                                        : "No application usage logged in this period"
-                                    font.family: Style.font.family
-                                    font.pixelSize: Style.font.caption
-                                    color: root.dim
-                                }
+                                icon: "󰍹"
+                                title: root.appScope === "current"
+                                    ? "Timer is Idle"
+                                    : (root.appTagFilter !== "" ? "No Data for \"" + root.appTagFilter + "\"" : "No Application Data")
+                                description: root.appScope === "current"
+                                    ? "Application usage is tracked in real-time while the study timer is running."
+                                    : (root.appTagFilter !== ""
+                                        ? "No application activity was recorded under this subject during the selected period."
+                                        : "No active application usage recorded in this period. Start studying to log app usage.")
                             }
                         }
                     }

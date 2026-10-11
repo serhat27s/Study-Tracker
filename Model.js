@@ -194,9 +194,14 @@ function formatDateReadable(keyStr) {
     if (!keyStr) return "";
     var parts = keyStr.split("-");
     if (parts.length !== 3) return keyStr;
-    var d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+    var year = parseInt(parts[0], 10);
+    var d = new Date(year, parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
     var dayIdx = (d.getDay() + 6) % 7;
-    return DAY_NAMES[dayIdx] + ", " + MONTH_NAMES[d.getMonth()] + " " + d.getDate();
+    var res = DAY_NAMES[dayIdx] + ", " + MONTH_NAMES[d.getMonth()] + " " + d.getDate();
+    if (year !== (new Date()).getFullYear()) {
+        res += " " + year;
+    }
+    return res;
 }
 
 // -----------------------------------------------------------------------------
