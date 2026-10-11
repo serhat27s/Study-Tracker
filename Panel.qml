@@ -209,16 +209,16 @@ Panel {
         root.activeColorTarget = tagName
 
         if (tagName === "__new__") {
-            root.paletteTargetY = Style.space(36)
+            root.paletteTargetY = Style.space(42)
         } else if (item && typeof tagMenu !== "undefined" && tagMenu) {
             var pos = item.mapToItem(tagMenu, 0, 0)
             var itemY = pos.y
             var itemH = item.height
             var palH = (typeof colorPaletteCard !== "undefined" && colorPaletteCard && colorPaletteCard.implicitHeight > 0)
-                ? colorPaletteCard.implicitHeight : Style.space(150)
+                ? colorPaletteCard.implicitHeight : Style.space(200)
 
             // Dynamically position palette above or below item
-            var topLimit = Style.space(36)
+            var topLimit = Style.space(42)
             if (itemY - palH - Style.space(4) >= topLimit) {
                 root.paletteTargetY = itemY - palH - Style.space(4)
             } else {
@@ -1676,10 +1676,10 @@ Panel {
                 z: 51
                 x: root.tagMenuX
                 y: root.tagMenuY
-                width: Style.space(252)
-                height: Math.max(tagMenuCol.implicitHeight + Style.space(12), root.activeColorTarget.length > 0 ? (root.paletteTargetY + (typeof colorPaletteCard !== "undefined" && colorPaletteCard && colorPaletteCard.implicitHeight > 0 ? colorPaletteCard.implicitHeight : Style.space(150)) + Style.space(8)) : 0)
+                width: Style.space(280)
+                height: Math.max(tagMenuCol.implicitHeight + Style.space(16), root.activeColorTarget.length > 0 ? (root.paletteTargetY + (typeof colorPaletteCard !== "undefined" && colorPaletteCard && colorPaletteCard.implicitHeight > 0 ? colorPaletteCard.implicitHeight : Style.space(200)) + Style.space(12)) : 0)
                 Behavior on height { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
-                radius: Style.space(8)
+                radius: Style.space(10)
                 color: Color.popups.background
                 border.width: 1
                 border.color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.18)
@@ -1695,21 +1695,21 @@ Panel {
                     anchors.top: parent.top
                     anchors.left: parent.left
                     anchors.right: parent.right
-                    anchors.margins: Style.space(6)
-                    spacing: Style.space(4)
+                    anchors.margins: Style.space(8)
+                    spacing: Style.space(6)
 
                     // Input on top: color preview + type → create new subject
                     RowLayout {
                         id: tagInputRow
                         width: parent.width
-                        spacing: Style.space(4)
+                        spacing: Style.space(6)
 
                         // Color picker button for new subject
                         Rectangle {
                             id: newTagColorBtn
-                            Layout.preferredWidth: Style.space(24)
-                            Layout.preferredHeight: Style.space(24)
-                            radius: Style.space(12)
+                            Layout.preferredWidth: Style.space(28)
+                            Layout.preferredHeight: Style.space(28)
+                            radius: Style.space(14)
                             readonly property color previewCol: root.newTagColor.length > 0
                                 ? root.newTagColor
                                 : (tagInput.text.trim().length > 0 ? Model.tagColor(tagInput.text.trim(), root.w ? root.w.tagColors : null) : Color.accent)
@@ -1722,7 +1722,7 @@ Panel {
                                 visible: root.newTagColor.length === 0 && tagInput.text.trim().length === 0
                                 text: "󰏘"
                                 font.family: Style.font.family
-                                font.pixelSize: Style.font.caption * 0.75
+                                font.pixelSize: Style.font.caption * 0.8
                                 color: "#ffffff"
                             }
 
@@ -1743,11 +1743,11 @@ Panel {
                         TextField {
                             id: tagInput
                             Layout.fillWidth: true
-                            Layout.preferredHeight: Style.space(24)
+                            Layout.preferredHeight: Style.space(28)
                             foreground: root.fg
                             placeholderText: "New Subject…"
                             font.family: Style.font.family
-                            font.pixelSize: Style.font.caption * 0.95
+                            font.pixelSize: Style.font.bodySmall
                             maximumLength: 24
                             onAccepted: root.submitNewTag()
                             Keys.onEscapePressed: {
@@ -1757,16 +1757,16 @@ Panel {
                         }
 
                         Rectangle {
-                            Layout.preferredWidth: Style.space(24)
-                            Layout.preferredHeight: Style.space(24)
-                            radius: Style.space(5)
+                            Layout.preferredWidth: Style.space(28)
+                            Layout.preferredHeight: Style.space(28)
+                            radius: Style.space(6)
                             readonly property bool can: tagInput.text.trim().length > 0
                             color: can ? Color.accent : root.surface
                             Text {
                                 anchors.centerIn: parent
                                 text: "󰐕"
                                 font.family: Style.font.family
-                                font.pixelSize: Style.font.caption
+                                font.pixelSize: Style.font.icon
                                 color: parent.can ? Color.popups.background : root.dim
                             }
                             MouseArea {
@@ -1792,9 +1792,9 @@ Panel {
                             if (q.length === 0) return all
                             return all.filter(function(t) { return t.toLowerCase().indexOf(q) !== -1 })
                         }
-                        readonly property real rowH: Style.space(24)
+                        readonly property real rowH: Style.space(28)
                         width: parent.width
-                        height: Math.max(rowH, Math.min(filtered.length, 5) * (rowH + spacing))
+                        height: Math.max(rowH, Math.min(filtered.length, 6) * (rowH + spacing))
                         implicitHeight: height
                         spacing: Style.space(2)
                         clip: true
@@ -1809,7 +1809,7 @@ Panel {
                             readonly property bool isColorTarget: root.activeColorTarget === modelData
                             width: tagMenuList.width
                             height: tagMenuList.rowH
-                            radius: Style.space(5)
+                            radius: Style.space(6)
                             color: isColorTarget
                                 ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.22)
                                 : (sel ? Qt.rgba(tagCol.r, tagCol.g, tagCol.b, 0.18)
@@ -1817,16 +1817,16 @@ Panel {
 
                             RowLayout {
                                 anchors.fill: parent
-                                anchors.leftMargin: Style.space(6)
-                                anchors.rightMargin: Style.space(4)
-                                spacing: Style.space(4)
+                                anchors.leftMargin: Style.space(8)
+                                anchors.rightMargin: Style.space(6)
+                                spacing: Style.space(6)
 
                                 // Clickable color dot
                                 Rectangle {
                                     id: tagDotBtn
-                                    Layout.preferredWidth: Style.space(10)
-                                    Layout.preferredHeight: Style.space(10)
-                                    radius: Style.space(5)
+                                    Layout.preferredWidth: Style.space(12)
+                                    Layout.preferredHeight: Style.space(12)
+                                    radius: Style.space(6)
                                     color: tagCol
                                     border.width: isColorTarget ? 2 : (dotMouse.containsMouse ? 1.5 : 1)
                                     border.color: isColorTarget ? Color.accent : (dotMouse.containsMouse ? root.fg : Qt.rgba(0, 0, 0, 0.2))
@@ -1853,7 +1853,7 @@ Panel {
                                     elide: Text.ElideRight
                                     text: modelData
                                     font.family: Style.font.family
-                                    font.pixelSize: Style.font.caption * 0.95
+                                    font.pixelSize: Style.font.bodySmall
                                     font.bold: sel
                                     color: root.fg
                                 }
@@ -1864,7 +1864,7 @@ Panel {
                                     visible: isColorTarget || rowMouse.containsMouse
                                     text: "󰏘"
                                     font.family: Style.font.family
-                                    font.pixelSize: Style.font.caption * 0.85
+                                    font.pixelSize: Style.font.caption
                                     color: isColorTarget ? Color.accent : (palIconMouse.containsMouse ? Color.accent : root.dim)
 
                                     MouseArea {
@@ -1889,7 +1889,7 @@ Panel {
                                     visible: sel && !rowMouse.containsMouse && !isColorTarget
                                     text: "󰄬"
                                     font.family: Style.font.family
-                                    font.pixelSize: Style.font.caption * 0.85
+                                    font.pixelSize: Style.font.caption
                                     color: tagCol
                                 }
 
@@ -1898,7 +1898,7 @@ Panel {
                                     visible: rowMouse.containsMouse
                                     text: "󰆴"
                                     font.family: Style.font.family
-                                    font.pixelSize: Style.font.caption * 0.85
+                                    font.pixelSize: Style.font.caption
                                     color: trashMouse.containsMouse ? Color.urgent : root.dim
 
                                     MouseArea {
@@ -1923,8 +1923,8 @@ Panel {
                             MouseArea {
                                 id: rowMouse
                                 anchors.fill: parent
-                                anchors.leftMargin: Style.space(18)
-                                anchors.rightMargin: Style.space(38)
+                                anchors.leftMargin: Style.space(20)
+                                anchors.rightMargin: Style.space(44)
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: {
@@ -1952,12 +1952,12 @@ Panel {
                 Rectangle {
                     id: colorPaletteCard
                     z: 60
-                    x: Style.space(6)
-                    width: parent.width - Style.space(12)
+                    x: Style.space(8)
+                    width: parent.width - Style.space(16)
                     y: root.paletteTargetY
                     Behavior on y { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
-                    implicitHeight: colorPickerCol.implicitHeight + Style.space(12)
-                    radius: Style.space(7)
+                    implicitHeight: colorPickerCol.implicitHeight + Style.space(16)
+                    radius: Style.space(8)
                     color: Color.popups.background
                     border.width: 1.5
                     border.color: Color.accent
@@ -2038,18 +2038,18 @@ Panel {
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.top: parent.top
-                        anchors.margins: Style.space(6)
-                        spacing: Style.space(4)
+                        anchors.margins: Style.space(8)
+                        spacing: Style.space(6)
 
                         // Title row
                         RowLayout {
                             width: parent.width
-                            spacing: Style.space(5)
+                            spacing: Style.space(6)
 
                             Rectangle {
-                                Layout.preferredWidth: Style.space(10)
-                                Layout.preferredHeight: Style.space(10)
-                                radius: Style.space(5)
+                                Layout.preferredWidth: Style.space(12)
+                                Layout.preferredHeight: Style.space(12)
+                                radius: Style.space(6)
                                 color: colorPaletteCard.currentColor
                                 border.width: 1
                                 border.color: Qt.rgba(255, 255, 255, 0.4)
@@ -2062,7 +2062,7 @@ Panel {
                                     : "Color for “" + root.activeColorTarget + "”:"
                                 elide: Text.ElideRight
                                 font.family: Style.font.family
-                                font.pixelSize: Style.font.caption * 0.8
+                                font.pixelSize: Style.font.caption * 0.85
                                 font.bold: true
                                 color: root.fg
                             }
@@ -2070,7 +2070,7 @@ Panel {
                             Text {
                                 text: "✕"
                                 font.family: Style.font.family
-                                font.pixelSize: Style.font.caption * 0.85
+                                font.pixelSize: Style.font.caption
                                 color: closePalMouse.containsMouse ? root.fg : root.dim
 
                                 MouseArea {
@@ -2090,16 +2090,16 @@ Panel {
                             anchors.horizontalCenter: parent.horizontalCenter
                             columns: 7
                             rows: 2
-                            rowSpacing: Style.space(4)
-                            columnSpacing: Style.space(4)
+                            rowSpacing: Style.space(6)
+                            columnSpacing: Style.space(6)
 
                             Repeater {
                                 model: root.colorPalette
 
                                 Rectangle {
                                     id: swatchCircle
-                                    width: Style.space(20)
-                                    height: Style.space(20)
+                                    width: Style.space(24)
+                                    height: Style.space(24)
                                     radius: width / 2
                                     color: modelData
                                     readonly property bool isCurrent: {
@@ -2108,7 +2108,7 @@ Panel {
                                             : (root.w && root.w.tagColors ? root.w.tagColors[root.activeColorTarget] : "")
                                         return Boolean(cur && cur.toLowerCase() === modelData.toLowerCase())
                                     }
-                                    border.width: isCurrent ? 2 : (swatchMouse.containsMouse ? 1.5 : 1)
+                                    border.width: isCurrent ? 2.5 : (swatchMouse.containsMouse ? 2 : 1)
                                     border.color: isCurrent ? "#ffffff" : (swatchMouse.containsMouse ? Color.accent : Qt.rgba(0, 0, 0, 0.35))
                                     scale: swatchMouse.containsMouse ? 1.12 : 1.0
                                     Behavior on scale { NumberAnimation { duration: 90 } }
@@ -2118,7 +2118,7 @@ Panel {
                                         visible: parent.isCurrent
                                         text: "✓"
                                         font.family: Style.font.family
-                                        font.pixelSize: Style.font.caption * 0.7
+                                        font.pixelSize: Style.font.caption * 0.75
                                         font.bold: true
                                         color: "#ffffff"
                                     }
@@ -2144,13 +2144,13 @@ Panel {
                         // Hue Slider (0° - 360°)
                         RowLayout {
                             width: parent.width
-                            spacing: Style.space(4)
+                            spacing: Style.space(6)
 
                             Text {
-                                Layout.preferredWidth: Style.space(20)
+                                Layout.preferredWidth: Style.space(24)
                                 text: "Hue"
                                 font.family: Style.font.family
-                                font.pixelSize: Style.font.caption * 0.7
+                                font.pixelSize: Style.font.caption * 0.75
                                 font.bold: true
                                 color: root.dim
                             }
@@ -2158,15 +2158,15 @@ Panel {
                             Item {
                                 id: hueTrackBox
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: Style.space(13)
+                                Layout.preferredHeight: Style.space(16)
 
                                 Rectangle {
                                     id: hueTrack
                                     anchors.left: parent.left
                                     anchors.right: parent.right
                                     anchors.verticalCenter: parent.verticalCenter
-                                    height: Style.space(7)
-                                    radius: Style.space(3.5)
+                                    height: Style.space(10)
+                                    radius: Style.space(5)
                                     border.width: 1
                                     border.color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.2)
                                     gradient: Gradient {
@@ -2183,13 +2183,13 @@ Panel {
 
                                 Rectangle {
                                     id: hueThumb
-                                    width: Style.space(13)
-                                    height: Style.space(13)
+                                    width: Style.space(16)
+                                    height: Style.space(16)
                                     radius: width / 2
                                     x: Math.max(0, Math.min(hueTrackBox.width - width, colorPaletteCard.hueVal * (hueTrackBox.width - width)))
                                     anchors.verticalCenter: parent.verticalCenter
                                     color: Qt.hsva(colorPaletteCard.hueVal, 1.0, 1.0, 1.0)
-                                    border.width: 1.5
+                                    border.width: 2
                                     border.color: "#ffffff"
                                 }
 
@@ -2214,11 +2214,11 @@ Panel {
                             }
 
                             Text {
-                                Layout.preferredWidth: Style.space(26)
+                                Layout.preferredWidth: Style.space(32)
                                 horizontalAlignment: Text.AlignRight
                                 text: Math.round(colorPaletteCard.hueVal * 360) + "°"
                                 font.family: Style.font.family
-                                font.pixelSize: Style.font.caption * 0.7
+                                font.pixelSize: Style.font.caption * 0.75
                                 color: root.fg
                             }
                         }
@@ -2226,13 +2226,13 @@ Panel {
                         // Saturation Slider (0% - 100%)
                         RowLayout {
                             width: parent.width
-                            spacing: Style.space(4)
+                            spacing: Style.space(6)
 
                             Text {
-                                Layout.preferredWidth: Style.space(20)
+                                Layout.preferredWidth: Style.space(24)
                                 text: "Sat"
                                 font.family: Style.font.family
-                                font.pixelSize: Style.font.caption * 0.7
+                                font.pixelSize: Style.font.caption * 0.75
                                 font.bold: true
                                 color: root.dim
                             }
@@ -2240,15 +2240,15 @@ Panel {
                             Item {
                                 id: satTrackBox
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: Style.space(13)
+                                Layout.preferredHeight: Style.space(16)
 
                                 Rectangle {
                                     id: satTrack
                                     anchors.left: parent.left
                                     anchors.right: parent.right
                                     anchors.verticalCenter: parent.verticalCenter
-                                    height: Style.space(7)
-                                    radius: Style.space(3.5)
+                                    height: Style.space(10)
+                                    radius: Style.space(5)
                                     border.width: 1
                                     border.color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.2)
                                     gradient: Gradient {
@@ -2260,13 +2260,13 @@ Panel {
 
                                 Rectangle {
                                     id: satThumb
-                                    width: Style.space(13)
-                                    height: Style.space(13)
+                                    width: Style.space(16)
+                                    height: Style.space(16)
                                     radius: width / 2
                                     x: Math.max(0, Math.min(satTrackBox.width - width, colorPaletteCard.satVal * (satTrackBox.width - width)))
                                     anchors.verticalCenter: parent.verticalCenter
                                     color: Qt.hsva(colorPaletteCard.hueVal, colorPaletteCard.satVal, colorPaletteCard.briVal, 1.0)
-                                    border.width: 1.5
+                                    border.width: 2
                                     border.color: "#ffffff"
                                 }
 
@@ -2291,11 +2291,11 @@ Panel {
                             }
 
                             Text {
-                                Layout.preferredWidth: Style.space(26)
+                                Layout.preferredWidth: Style.space(32)
                                 horizontalAlignment: Text.AlignRight
                                 text: Math.round(colorPaletteCard.satVal * 100) + "%"
                                 font.family: Style.font.family
-                                font.pixelSize: Style.font.caption * 0.7
+                                font.pixelSize: Style.font.caption * 0.75
                                 color: root.fg
                             }
                         }
@@ -2303,13 +2303,13 @@ Panel {
                         // Brightness Slider (0% - 100%)
                         RowLayout {
                             width: parent.width
-                            spacing: Style.space(4)
+                            spacing: Style.space(6)
 
                             Text {
-                                Layout.preferredWidth: Style.space(20)
+                                Layout.preferredWidth: Style.space(24)
                                 text: "Bri"
                                 font.family: Style.font.family
-                                font.pixelSize: Style.font.caption * 0.7
+                                font.pixelSize: Style.font.caption * 0.75
                                 font.bold: true
                                 color: root.dim
                             }
@@ -2317,15 +2317,15 @@ Panel {
                             Item {
                                 id: briTrackBox
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: Style.space(13)
+                                Layout.preferredHeight: Style.space(16)
 
                                 Rectangle {
                                     id: briTrack
                                     anchors.left: parent.left
                                     anchors.right: parent.right
                                     anchors.verticalCenter: parent.verticalCenter
-                                    height: Style.space(7)
-                                    radius: Style.space(3.5)
+                                    height: Style.space(10)
+                                    radius: Style.space(5)
                                     border.width: 1
                                     border.color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.2)
                                     gradient: Gradient {
@@ -2337,13 +2337,13 @@ Panel {
 
                                 Rectangle {
                                     id: briThumb
-                                    width: Style.space(13)
-                                    height: Style.space(13)
+                                    width: Style.space(16)
+                                    height: Style.space(16)
                                     radius: width / 2
                                     x: Math.max(0, Math.min(briTrackBox.width - width, colorPaletteCard.briVal * (briTrackBox.width - width)))
                                     anchors.verticalCenter: parent.verticalCenter
                                     color: Qt.hsva(colorPaletteCard.hueVal, colorPaletteCard.satVal, colorPaletteCard.briVal, 1.0)
-                                    border.width: 1.5
+                                    border.width: 2
                                     border.color: "#ffffff"
                                 }
 
@@ -2368,11 +2368,11 @@ Panel {
                             }
 
                             Text {
-                                Layout.preferredWidth: Style.space(26)
+                                Layout.preferredWidth: Style.space(32)
                                 horizontalAlignment: Text.AlignRight
                                 text: Math.round(colorPaletteCard.briVal * 100) + "%"
                                 font.family: Style.font.family
-                                font.pixelSize: Style.font.caption * 0.7
+                                font.pixelSize: Style.font.caption * 0.75
                                 color: root.fg
                             }
                         }
@@ -2386,16 +2386,16 @@ Panel {
                         // Bottom Row: Optional HEX field and 🎲 Random / Shuffle button
                         RowLayout {
                             width: parent.width
-                            spacing: Style.space(4)
+                            spacing: Style.space(6)
 
                             TextField {
                                 id: customHexInput
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: Style.space(22)
+                                Layout.preferredHeight: Style.space(26)
                                 foreground: root.fg
                                 placeholderText: "#HEX (e.g. #3b82f6)"
                                 font.family: Style.font.family
-                                font.pixelSize: Style.font.caption * 0.8
+                                font.pixelSize: Style.font.caption * 0.85
                                 maximumLength: 7
                                 onTextChanged: {
                                     if (colorPaletteCard.isSyncing) return
@@ -2422,9 +2422,9 @@ Panel {
 
                             Rectangle {
                                 id: randomBtn
-                                Layout.preferredHeight: Style.space(22)
-                                Layout.preferredWidth: Style.space(26)
-                                radius: Style.space(4)
+                                Layout.preferredHeight: Style.space(26)
+                                Layout.preferredWidth: Style.space(32)
+                                radius: Style.space(5)
                                 color: randomMouse.containsMouse ? root.surfaceHover : root.surface
                                 border.width: 1
                                 border.color: randomMouse.containsMouse ? Color.accent : root.hairline
@@ -2433,7 +2433,7 @@ Panel {
                                     anchors.centerIn: parent
                                     text: "🎲"
                                     font.family: Style.font.family
-                                    font.pixelSize: Style.font.caption * 0.85
+                                    font.pixelSize: Style.font.caption
                                 }
 
                                 MouseArea {
