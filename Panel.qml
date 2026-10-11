@@ -186,11 +186,13 @@ Panel {
 
     function closeTagMenu() {
         if (!root.tagMenuOpen) return
-        root.tagMenuOpen = false
         root.activeColorTarget = ""
         root.newTagColor = ""
         tagInput.text = ""
-        keyCatcher.forceActiveFocus()
+        Qt.callLater(function() {
+            root.tagMenuOpen = false
+            keyCatcher.forceActiveFocus()
+        })
     }
 
     function submitNewTag() {
@@ -412,7 +414,7 @@ Panel {
         PanelKeyCatcher {
             id: keyCatcher
             anchors.fill: parent
-            blocked: root.tagMenuOpen
+            blocked: root.tagMenuOpen || (typeof tagInput !== "undefined" && tagInput && tagInput.activeFocus) || (typeof customHexInput !== "undefined" && customHexInput && customHexInput.activeFocus)
 
             onCloseRequested: root.close()
             onTabRequested: function(direction) { root.switchPanel(direction) }
@@ -1779,8 +1781,16 @@ Panel {
                             font.family: Style.font.family
                             font.pixelSize: Style.font.bodySmall
                             maximumLength: 24
-                            onAccepted: root.submitNewTag()
-                            Keys.onEscapePressed: {
+                            Keys.onReturnPressed: function(event) {
+                                event.accepted = true
+                                root.submitNewTag()
+                            }
+                            Keys.onEnterPressed: function(event) {
+                                event.accepted = true
+                                root.submitNewTag()
+                            }
+                            Keys.onEscapePressed: function(event) {
+                                event.accepted = true
                                 if (root.activeColorTarget.length > 0) root.activeColorTarget = ""
                                 else root.closeTagMenu()
                             }
@@ -2445,12 +2455,25 @@ Panel {
                                         colorPaletteCard.isSyncing = false
                                     }
                                 }
-                                onAccepted: {
+                                Keys.onReturnPressed: function(event) {
+                                    event.accepted = true
                                     var h = text.trim()
                                     if (h.indexOf("#") !== 0 && h.length > 0) h = "#" + h
                                     if (Model.hexToRgb(h)) {
                                         colorPaletteCard.selectSwatch(h)
                                     }
+                                }
+                                Keys.onEnterPressed: function(event) {
+                                    event.accepted = true
+                                    var h = text.trim()
+                                    if (h.indexOf("#") !== 0 && h.length > 0) h = "#" + h
+                                    if (Model.hexToRgb(h)) {
+                                        colorPaletteCard.selectSwatch(h)
+                                    }
+                                }
+                                Keys.onEscapePressed: function(event) {
+                                    event.accepted = true
+                                    root.activeColorTarget = ""
                                 }
                             }
 
