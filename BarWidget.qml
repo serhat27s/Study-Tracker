@@ -489,21 +489,15 @@ BarWidget {
         }
     }
 
-    // Study icon for bar button (Graduation Cap / nf-md-school)
-    readonly property string studyIcon: "󰙛"
-
     WidgetButton {
         id: button
         anchors.fill: parent
         bar: root.bar
         text: {
             if (!root.isRunning) {
-                return root.studyIcon
+                return root.activeMode === "pomodoro" ? "󰔟" : "󱎫"
             }
-            if (root.activeMode === "pomodoro" && root.pomodoroPhase !== "work") {
-                return "☕ " + root.formattedTime() + " · Break"
-            }
-            return root.studyIcon + " " + root.formattedTime() + " · 🏷️ " + root.activeTag
+            return (root.activeMode === "pomodoro" ? "󰄉 " : "󰔛 ") + root.formattedTime() + " · 🏷️ " + root.activeTag
         }
         tooltipText: "Study Tracker (" + (root.activeMode === "pomodoro" ? (root.pomodoroPhase === "work" ? "Pomodoro" : "Break") : "Stopwatch") + ") — Click: Open panel, Right-click: " + (root.isRunning ? "Pause" : "Start")
         onPressed: function(buttonCode) {
