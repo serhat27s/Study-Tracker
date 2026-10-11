@@ -15,7 +15,7 @@ Panel {
     property var hostWidget: null
     property var rootWidget: null
 
-    // 0: Focus (Timer + Activity), 1: Statistics (Hours per Subject), 2: System (Uptime + Apps)
+    // 0: Focus (Timer + Activity Graph), 1: Statistics (Hours per Subject), 2: Activity (Study Session Apps)
     property int currentTab: 0
 
     property bool tagMenuOpen: false
@@ -142,13 +142,11 @@ Panel {
 
     onOpenedChanged: {
         if (root.opened) {
-            if (w) w.refreshUptime()
             Qt.callLater(root.scrollToCurrent)
         }
     }
 
     function open() {
-        if (w) w.refreshUptime()
         root.controller.show()
         Qt.callLater(root.scrollToCurrent)
     }
@@ -166,7 +164,6 @@ Panel {
     function setTab(i) {
         root.closeTagMenu()
         root.hoveredCell = null
-        if (i === 2 && w) w.refreshUptime()
         root.currentTab = i
         if (i === 0) Qt.callLater(root.scrollToCurrent)
     }
@@ -448,7 +445,7 @@ Panel {
                     options: [
                         { value: "0", label: "Focus", icon: "󰔛" },
                         { value: "1", label: "Statistics", icon: "󰄨" },
-                        { value: "2", label: "System", icon: "󰍹" }
+                        { value: "2", label: "Activity", icon: "󰍹" }
                     ]
                     onPicked: function(v) { root.setTab(parseInt(v)) }
                 }
@@ -1475,86 +1472,44 @@ Panel {
 
                     // =========================================================
                     // =========================================================
-                    // TAB 3: SYSTEM (Uptime + Apps)
+                    // TAB 3: ACTIVITY (Study Session Apps)
                     // =========================================================
                     ColumnLayout {
                         spacing: Style.space(12)
 
-                        // Uptime Card
-                        Rectangle {
+                        RowLayout {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: Style.space(64)
-                            radius: Style.space(12)
-                            color: root.surface
-                            border.width: 1
-                            border.color: root.hairline
+                            spacing: Style.space(6)
 
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.margins: Style.space(12)
-                                spacing: Style.space(12)
-
-                                Rectangle {
-                                    Layout.preferredWidth: Style.space(40)
-                                    Layout.preferredHeight: Style.space(40)
-                                    radius: Style.space(10)
-                                    color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.15)
-
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: "󰔟"
-                                        font.family: Style.font.family
-                                        font.pixelSize: Style.font.iconLarge
-                                        color: Color.accent
-                                    }
+                            StatTile {
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: 1
+                                fg: root.fg
+                                label: "STATUS"
+                                value: {
+                                    if (!root.running) return "Idle"
+                                    if (root.isPomodoro && root.w && root.w.pomodoroPhase !== "work") return "Break"
+                                    return "Tracking"
                                 }
-
-                                Column {
-                                    Layout.fillWidth: true
-                                    spacing: Style.space(2)
-
-                                    SectionLabel {
-                                        width: parent.width
-                                        fg: root.fg
-                                        font.pixelSize: Style.font.caption * 0.85
-                                        text: "SYSTEM UPTIME"
-                                    }
-                                    Text {
-                                        width: parent.width
-                                        elide: Text.ElideRight
-                                        text: Model.formatUptime(root.w ? root.w.systemUptimeSeconds : 0)
-                                        font.family: Style.font.family
-                                        font.pixelSize: Style.font.heading
-                                        font.bold: true
-                                        color: root.fg
-                                    }
+                                valueColor: {
+                                    if (!root.running) return root.dim
+                                    if (root.isPomodoro && root.w && root.w.pomodoroPhase !== "work") return root.dim
+                                    return Color.accent
                                 }
-
-                                Column {
-                                    spacing: Style.space(2)
-
-                                    Text {
-                                        anchors.right: parent.right
-                                        text: "BOOTED"
-                                        font.family: Style.font.family
-                                        font.pixelSize: Style.font.caption * 0.85
-                                        font.bold: true
-                                        color: root.dim
-                                    }
-                                    Text {
-                                        anchors.right: parent.right
-                                        text: {
-                                            var up = root.w ? root.w.systemUptimeSeconds : 0
-                                            if (up <= 0) return "–"
-                                            var d = new Date(Date.now() - up * 1000)
-                                            return Model.padZero(d.getHours()) + ":" + Model.padZero(d.getMinutes())
-                                        }
-                                        font.family: Style.font.family
-                                        font.pixelSize: Style.font.bodySmall
-                                        font.bold: true
-                                        color: root.fg
-                                    }
-                                }
+                            }
+                            StatTile {
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: 1
+                                fg: root.fg
+                                label: "SESSION"
+                                value: (root.w && root.w.sessionDuration > 0) ? Model.formatDurationHuman(root.w.sessionDuration) : "0 min"
+                            }
+                            StatTile {
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: 1
+                                fg: root.fg
+                                label: "TOTAL"
+                                value: root.appUsageData.totalFormatted
                             }
                         }
 
@@ -1564,10 +1519,10 @@ Panel {
                             SectionLabel {
                                 Layout.fillWidth: true
                                 fg: root.fg
-                                text: "APPLICATION USAGE"
+                                text: "STUDY SESSION ACTIVITY"
                             }
                             Text {
-                                text: root.appUsageData.totalFormatted
+                                text: root.appUsageData.apps ? (root.appUsageData.apps.length + (root.appUsageData.apps.length === 1 ? " App" : " Apps")) : "0 Apps"
                                 font.family: Style.font.family
                                 font.pixelSize: Style.font.caption
                                 font.bold: true
@@ -1717,13 +1672,19 @@ Panel {
                                 visible: appList.count === 0
                                 icon: "󰍹"
                                 title: root.appScope === "current"
-                                    ? "Timer is Idle"
-                                    : (root.appTagFilter !== "" ? "No Data for \"" + root.appTagFilter + "\"" : "No Application Data")
+                                    ? (root.isPomodoro && root.w && root.w.pomodoroPhase !== "work"
+                                        ? "Break in Progress"
+                                        : (root.running ? "Tracking Activity…" : "Timer is Idle"))
+                                    : (root.appTagFilter !== "" ? "No Data for \"" + root.appTagFilter + "\"" : "No Activity Data")
                                 description: root.appScope === "current"
-                                    ? "Application usage is tracked in real-time while the study timer is running."
+                                    ? (root.isPomodoro && root.w && root.w.pomodoroPhase !== "work"
+                                        ? "App tracking is paused during breaks. Activity is only recorded while studying."
+                                        : (root.running
+                                            ? "Your active application is being recorded for this session."
+                                            : "Start the study timer to track application activity in real time."))
                                     : (root.appTagFilter !== ""
                                         ? "No application activity was recorded under this subject during the selected period."
-                                        : "No active application usage recorded in this period. Start studying to log app usage.")
+                                        : "No active application usage recorded in this period. Start studying to log app activity.")
                             }
                         }
                     }

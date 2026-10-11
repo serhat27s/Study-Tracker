@@ -31,6 +31,9 @@ BarWidget {
     // System uptime in seconds
     property int systemUptimeSeconds: 0
 
+    // True when timer is in an active study session (stopwatch or pomodoro work phase)
+    readonly property bool isStudySession: (root.activeMode !== "pomodoro" || root.pomodoroPhase === "work")
+
     // App usage for active session: { [appName]: seconds }
     property var currentAppUsage: ({})
 
@@ -203,11 +206,13 @@ BarWidget {
             }
 
             if (root.isRunning) {
-                var app = root.getCurrentActiveApp()
-                var usage = Object.assign({}, root.currentAppUsage)
-                usage[app] = (usage[app] || 0) + 1
-                root.currentAppUsage = usage
-                root.sessionDuration += 1
+                if (root.isStudySession) {
+                    var app = root.getCurrentActiveApp()
+                    var usage = Object.assign({}, root.currentAppUsage)
+                    usage[app] = (usage[app] || 0) + 1
+                    root.currentAppUsage = usage
+                    root.sessionDuration += 1
+                }
 
                 if (root.activeMode === "pomodoro") {
                     if (root.remainingSeconds > 0) {
@@ -275,7 +280,7 @@ BarWidget {
 
     function resetTimer() {
         root.isRunning = false
-        if (root.sessionDuration >= 60 && (root.activeMode !== "pomodoro" || root.pomodoroPhase === "work")) {
+        if (root.sessionDuration >= 60 && root.isStudySession) {
             root.saveSessionRecord()
         } else {
             root.sessionDuration = 0
@@ -294,6 +299,12 @@ BarWidget {
 
     function setMode(mode) {
         if (root.activeMode === mode) return
+        if (root.sessionDuration >= 60 && root.isStudySession) {
+            root.saveSessionRecord()
+        } else {
+            root.sessionDuration = 0
+            root.currentAppUsage = ({})
+        }
         root.isRunning = false
         root.activeMode = mode
         if (mode === "pomodoro") {
@@ -304,6 +315,12 @@ BarWidget {
     }
 
     function setPomodoroPhase(phase) {
+        if (root.sessionDuration >= 60 && root.isStudySession) {
+            root.saveSessionRecord()
+        } else {
+            root.sessionDuration = 0
+            root.currentAppUsage = ({})
+        }
         root.isRunning = false
         if (phase === "longBreak" && root.pomodoroLongBreakDuration <= 0) {
             phase = "shortBreak"
