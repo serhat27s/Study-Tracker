@@ -263,19 +263,17 @@ BarWidget {
     }
 
     function finishAndSave() {
-        root.isRunning = false
-        root.saveSessionRecord()
-        if (root.activeMode === "pomodoro") {
-            root.remainingSeconds = (root.pomodoroPhase === "work") ? root.pomodoroWorkDuration : (root.pomodoroPhase === "shortBreak" ? root.pomodoroShortBreakDuration : root.pomodoroLongBreakDuration)
-        } else {
-            root.elapsedSeconds = 0
-        }
+        root.resetTimer()
     }
 
     function resetTimer() {
         root.isRunning = false
-        root.sessionDuration = 0
-        root.currentAppUsage = ({})
+        if (root.sessionDuration >= 60 && (root.activeMode !== "pomodoro" || root.pomodoroPhase === "work")) {
+            root.saveSessionRecord()
+        } else {
+            root.sessionDuration = 0
+            root.currentAppUsage = ({})
+        }
         if (root.activeMode === "pomodoro") {
             root.remainingSeconds = (root.pomodoroPhase === "work") ? root.pomodoroWorkDuration : (root.pomodoroPhase === "shortBreak" ? root.pomodoroShortBreakDuration : root.pomodoroLongBreakDuration)
         } else {

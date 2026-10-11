@@ -303,8 +303,7 @@ Panel {
                 if (t === "1") root.setTab(0)
                 else if (t === "2") root.setTab(1)
                 else if (t === "3") root.setTab(2)
-                else if (t === "r" && root.w) root.w.resetTimer()
-                else if (t === "s" && root.w) root.w.finishAndSave()
+                else if ((t === "r" || t === "s") && root.w) root.w.resetTimer()
                 else if (t === "m" && root.w) root.w.setMode(root.isPomodoro ? "tracker" : "pomodoro")
                 else if (t === "t") root.openTagMenu()
             }
@@ -845,48 +844,42 @@ Panel {
                                             }
                                         }
 
-                                        // Sekundär-Aktionen
-                                        Repeater {
-                                            model: [
-                                                { icon: "󰆓", tip: "Session speichern (s)", action: "save" },
-                                                { icon: "󰑐", tip: "Zurücksetzen (r)", action: "reset" }
-                                            ]
+                                        // Zurücksetzen-Button (speichert angefangene Sessions ab 1 Min. automatisch)
+                                        Rectangle {
+                                            readonly property bool canReset: root.w && (
+                                                root.running
+                                                || root.w.sessionDuration > 0
+                                                || (root.isPomodoro && root.w.remainingSeconds !== root.phaseTotal)
+                                                || (!root.isPomodoro && root.w.elapsedSeconds > 0)
+                                            )
+                                            Layout.preferredWidth: Style.space(34)
+                                            Layout.preferredHeight: Style.space(34)
+                                            radius: Style.space(8)
+                                            color: resetMouse.containsMouse && canReset ? root.surfaceHover : root.surface
+                                            border.width: 1
+                                            border.color: root.hairline
+                                            opacity: canReset ? 1 : 0.4
 
-                                            Rectangle {
-                                                readonly property bool enabledAction: root.w && root.w.sessionDuration > 0
-                                                Layout.preferredWidth: Style.space(34)
-                                                Layout.preferredHeight: Style.space(34)
-                                                radius: Style.space(8)
-                                                color: actMouse.containsMouse && enabledAction ? root.surfaceHover : root.surface
-                                                border.width: 1
-                                                border.color: root.hairline
-                                                opacity: enabledAction ? 1 : 0.4
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: "󰑐"
+                                                font.family: Style.font.family
+                                                font.pixelSize: Style.font.icon
+                                                color: root.fg
+                                            }
 
-                                                Text {
-                                                    anchors.centerIn: parent
-                                                    text: modelData.icon
-                                                    font.family: Style.font.family
-                                                    font.pixelSize: Style.font.icon
-                                                    color: root.fg
-                                                }
+                                            MouseArea {
+                                                id: resetMouse
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                enabled: parent.canReset
+                                                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                onClicked: if (root.w) root.w.resetTimer()
+                                            }
 
-                                                MouseArea {
-                                                    id: actMouse
-                                                    anchors.fill: parent
-                                                    hoverEnabled: true
-                                                    enabled: parent.enabledAction
-                                                    cursorShape: Qt.PointingHandCursor
-                                                    onClicked: {
-                                                        if (!root.w) return
-                                                        if (modelData.action === "save") root.w.finishAndSave()
-                                                        else root.w.resetTimer()
-                                                    }
-                                                }
-
-                                                PanelToolTip {
-                                                    visible: actMouse.containsMouse
-                                                    text: modelData.tip
-                                                }
+                                            PanelToolTip {
+                                                visible: resetMouse.containsMouse
+                                                text: "Zurücksetzen (r)"
                                             }
                                         }
                                     }
