@@ -2028,18 +2028,6 @@ Panel {
                         selectSwatch(hex)
                     }
 
-                    function setAutoColor() {
-                        if (root.activeColorTarget === "__new__") {
-                            root.newTagColor = ""
-                            var defHex = Model.tagColor("", null)
-                            syncHsvFromHex(defHex)
-                        } else if (root.w && root.activeColorTarget.length > 0) {
-                            root.w.setTagColor(root.activeColorTarget, "")
-                            var defHex = root.colorForTag(root.activeColorTarget)
-                            syncHsvFromHex(defHex)
-                        }
-                    }
-
                     Component.onCompleted: syncFromTarget()
 
                     // Do not propagate clicks inside palette to list underneath
@@ -2395,7 +2383,7 @@ Panel {
                             color: root.hairline
                         }
 
-                        // Bottom Row: Optional HEX field, 🎲 Random / Shuffle, and Auto button
+                        // Bottom Row: Optional HEX field and 🎲 Random / Shuffle button
                         RowLayout {
                             width: parent.width
                             spacing: Style.space(6)
@@ -2435,7 +2423,7 @@ Panel {
                             Rectangle {
                                 id: randomBtn
                                 Layout.preferredHeight: Style.space(26)
-                                Layout.preferredWidth: Style.space(30)
+                                Layout.preferredWidth: Style.space(32)
                                 radius: Style.space(5)
                                 color: randomMouse.containsMouse ? root.surfaceHover : root.surface
                                 border.width: 1
@@ -2459,37 +2447,6 @@ Panel {
                                 PanelToolTip {
                                     visible: randomMouse.containsMouse
                                     text: "Random color (🎲)"
-                                }
-                            }
-
-                            Rectangle {
-                                id: autoBtn
-                                Layout.preferredHeight: Style.space(26)
-                                Layout.preferredWidth: Style.space(42)
-                                radius: Style.space(5)
-                                color: autoBtnMouse.containsMouse ? root.surfaceHover : root.surface
-                                border.width: 1
-                                border.color: autoBtnMouse.containsMouse ? Color.accent : root.hairline
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: "Auto"
-                                    font.family: Style.font.family
-                                    font.pixelSize: Style.font.caption * 0.8
-                                    color: root.dim
-                                }
-
-                                MouseArea {
-                                    id: autoBtnMouse
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: colorPaletteCard.setAutoColor()
-                                }
-
-                                PanelToolTip {
-                                    visible: autoBtnMouse.containsMouse
-                                    text: "Use automatic default color"
                                 }
                             }
                         }
