@@ -28,9 +28,9 @@ Panel {
     property string appTagFilter: ""        // "" = alle Fächer
     property var hoveredCell: null
 
-    // Feste Panelgröße – ändert sich nie, egal welcher Tab / Zustand
-    readonly property int panelWidth: Style.space(420)
-    readonly property int panelInnerHeight: Style.space(560)
+    // Feste Panelgröße – angepasst auf 52-Wochen Ganzjahres-Aktivitätsgrid
+    readonly property int panelWidth: Style.space(820)
+    readonly property int panelInnerHeight: Style.space(580)
 
     readonly property color fg: root.barForeground
     readonly property color dim: Qt.darker(fg, 1.5)
@@ -89,13 +89,7 @@ Panel {
     }
 
     onOpenedChanged: {
-        if (root.opened && root.currentTab === 0) {
-            Qt.callLater(function() {
-                if (typeof heatmapFlick !== "undefined" && heatmapFlick) {
-                    heatmapFlick.contentX = Math.max(0, heatmapFlick.contentWidth - heatmapFlick.width)
-                }
-            })
-        }
+        if (root.opened && w) w.refreshUptime()
     }
 
     function open() {
@@ -117,13 +111,6 @@ Panel {
         root.closeTagMenu()
         if (i === 2 && w) w.refreshUptime()
         root.currentTab = i
-        if (i === 0) {
-            Qt.callLater(function() {
-                if (typeof heatmapFlick !== "undefined" && heatmapFlick) {
-                    heatmapFlick.contentX = Math.max(0, heatmapFlick.contentWidth - heatmapFlick.width)
-                }
-            })
-        }
     }
 
     function openTagMenu() {
@@ -308,7 +295,8 @@ Panel {
                 // Tab-Leiste
                 // -------------------------------------------------------------
                 Segmented {
-                    Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.preferredWidth: Style.space(480)
                     Layout.preferredHeight: Style.space(30)
                     fg: root.fg
                     fontSize: Style.font.bodySmall
@@ -513,7 +501,8 @@ Panel {
 
                                     // Phasen-Auswahl (Pomodoro) mit Einstellungs-Button bzw. Info-Zeile (Stoppuhr)
                                     RowLayout {
-                                        width: parent.width
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        width: Math.min(parent.width, Style.space(480))
                                         visible: root.isPomodoro
                                         spacing: Style.space(6)
 
@@ -791,7 +780,8 @@ Panel {
 
                                     // Steuerung
                                     RowLayout {
-                                        width: parent.width
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        width: Math.min(parent.width, Style.space(340))
                                         spacing: Style.space(8)
 
                                         // Primärer Start/Pause-Button
@@ -872,144 +862,70 @@ Panel {
                             }
 
                             // ---------------- Aktivitätsgraph (52 Wochen — Ganzes Jahr) ----------------
-                            Column {
-                                id: heatmapSection
+                            Rectangle {
                                 width: parent.width
-                                spacing: Style.space(6)
+                                implicitHeight: heatmapSectionCol.implicitHeight + Style.space(24)
+                                radius: Style.space(12)
+                                color: root.surface
+                                border.width: 1
+                                border.color: root.hairline
 
-                                RowLayout {
-                                    width: parent.width
+                                Column {
+                                    id: heatmapSectionCol
+                                    anchors.top: parent.top
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.margins: Style.space(12)
+                                    spacing: Style.space(8)
 
-                                    SectionLabel {
-                                        Layout.fillWidth: true
-                                        fg: root.fg
-                                        text: "AKTIVITÄT (52 WOCHEN — GANZES JAHR)"
+                                    RowLayout {
+                                        width: parent.width
+
+                                        SectionLabel {
+                                            Layout.fillWidth: true
+                                            fg: root.fg
+                                            text: "AKTIVITÄT (52 WOCHEN — GANZES JAHR)"
+                                        }
+
+                                        Text {
+                                            text: "󰈸 " + root.heatmapData.streakDays + " Tage Streak"
+                                            font.family: Style.font.family
+                                            font.pixelSize: Style.font.caption
+                                            font.bold: true
+                                            color: root.heatmapData.streakDays > 0 ? Color.accent : root.dim
+                                        }
                                     }
 
-                                    // Schnelle Scroll-Buttons links/rechts
+                                    // 52-Wochen Grid (Ganzes Jahr auf einen Blick, ohne Scrollen)
                                     Row {
-                                        spacing: Style.space(2)
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        spacing: Style.space(6)
 
-                                        Rectangle {
-                                            width: Style.space(20)
-                                            height: Style.space(20)
-                                            radius: Style.space(4)
-                                            color: scrollLeftMouse.containsMouse ? root.surfaceHover : "transparent"
-                                            border.width: 1
-                                            border.color: root.hairline
-
-                                            Text {
-                                                anchors.centerIn: parent
-                                                text: "󰅁"
-                                                font.family: Style.font.family
-                                                font.pixelSize: Style.font.caption
-                                                color: root.dim
-                                            }
-
-                                            MouseArea {
-                                                id: scrollLeftMouse
-                                                anchors.fill: parent
-                                                cursorShape: Qt.PointingHandCursor
-                                                onClicked: heatmapFlick.contentX = Math.max(0, heatmapFlick.contentX - Style.space(160))
-                                            }
-
-                                            PanelToolTip {
-                                                visible: scrollLeftMouse.containsMouse
-                                                text: "Frühere Monate anzeigen"
-                                            }
-                                        }
-
-                                        Rectangle {
-                                            width: Style.space(20)
-                                            height: Style.space(20)
-                                            radius: Style.space(4)
-                                            color: scrollRightMouse.containsMouse ? root.surfaceHover : "transparent"
-                                            border.width: 1
-                                            border.color: root.hairline
-
-                                            Text {
-                                                anchors.centerIn: parent
-                                                text: "󰅂"
-                                                font.family: Style.font.family
-                                                font.pixelSize: Style.font.caption
-                                                color: root.dim
-                                            }
-
-                                            MouseArea {
-                                                id: scrollRightMouse
-                                                anchors.fill: parent
-                                                cursorShape: Qt.PointingHandCursor
-                                                onClicked: heatmapFlick.contentX = Math.min(heatmapFlick.contentWidth - heatmapFlick.width, heatmapFlick.contentX + Style.space(160))
-                                            }
-
-                                            PanelToolTip {
-                                                visible: scrollRightMouse.containsMouse
-                                                text: "Zu heute scrollen"
-                                            }
-                                        }
-                                    }
-
-                                    Text {
-                                        text: "󰈸 " + root.heatmapData.streakDays + " Tage Streak"
-                                        font.family: Style.font.family
-                                        font.pixelSize: Style.font.caption
-                                        font.bold: true
-                                        color: root.heatmapData.streakDays > 0 ? Color.accent : root.dim
-                                    }
-                                }
-
-                                // 52-Wochen Grid mit fester Wochentagsspalte links
-                                Row {
-                                    width: parent.width
-                                    spacing: Style.space(4)
-
-                                    // Feste Spalte: Wochentage (Mo, Mi, Fr, So)
-                                    Column {
-                                        y: Style.space(15) // Offset für Monatsleiste oben
-                                        spacing: Style.space(3)
-
-                                        Repeater {
-                                            model: ["Mo", "", "Mi", "", "Fr", "", "So"]
-                                            Text {
-                                                width: Style.space(18)
-                                                height: Style.space(11)
-                                                text: modelData
-                                                font.family: Style.font.family
-                                                font.pixelSize: Style.font.caption * 0.72
-                                                color: root.faint
-                                                verticalAlignment: Text.AlignVCenter
-                                            }
-                                        }
-                                    }
-
-                                    // Horizontale Flickable für alle 52 Wochen des Jahres
-                                    Flickable {
-                                        id: heatmapFlick
-                                        width: parent.width - Style.space(22)
-                                        height: heatmapContentCol.implicitHeight + Style.space(4)
-                                        contentWidth: heatmapWeeksRow.implicitWidth + Style.space(20)
-                                        contentHeight: height
-                                        clip: true
-                                        boundsBehavior: Flickable.StopAtBounds
-                                        flickableDirection: Flickable.HorizontalFlick
-
-                                        ScrollBar.horizontal: ScrollBar {
-                                            policy: ScrollBar.AsNeeded
-                                        }
-
-                                        Component.onCompleted: {
-                                            Qt.callLater(function() {
-                                                heatmapFlick.contentX = Math.max(0, heatmapFlick.contentWidth - heatmapFlick.width)
-                                            })
-                                        }
-
+                                        // Wochentage links (Mo, Mi, Fr, So)
                                         Column {
-                                            id: heatmapContentCol
+                                            y: Style.space(15) // Offset für Monatsleiste oben
+                                            spacing: Style.space(3)
+
+                                            Repeater {
+                                                model: ["Mo", "", "Mi", "", "Fr", "", "So"]
+                                                Text {
+                                                    width: Style.space(18)
+                                                    height: Style.space(11)
+                                                    text: modelData
+                                                    font.family: Style.font.family
+                                                    font.pixelSize: Style.font.caption * 0.72
+                                                    color: root.faint
+                                                    verticalAlignment: Text.AlignVCenter
+                                                }
+                                            }
+                                        }
+
+                                        // 52 Wochen
+                                        Column {
                                             spacing: Style.space(3)
 
                                             // Monatsbeschriftung oben
                                             Row {
-                                                id: monthHeaderRow
                                                 spacing: Style.space(3)
 
                                                 Repeater {
@@ -1032,7 +948,6 @@ Panel {
 
                                             // 52 Wochenspalten
                                             Row {
-                                                id: heatmapWeeksRow
                                                 spacing: Style.space(3)
 
                                                 Repeater {
@@ -1073,58 +988,58 @@ Panel {
                                             }
                                         }
                                     }
-                                }
 
-                                // Info-Zeile + Legende (feste Höhe)
-                                RowLayout {
-                                    width: parent.width
-                                    height: Style.space(18)
-                                    spacing: Style.space(8)
+                                    // Info-Zeile + Legende
+                                    RowLayout {
+                                        width: parent.width
+                                        height: Style.space(18)
+                                        spacing: Style.space(8)
 
-                                    Text {
-                                        Layout.fillWidth: true
-                                        elide: Text.ElideRight
-                                        text: {
-                                            var c = root.hoveredCell
-                                            if (c) {
-                                                var s = c.dateStr + " · " + c.focusTimeStr
-                                                if (c.dominantTags && c.dominantTags.length > 0) s += " · " + c.dominantTags
-                                                return s
-                                            }
-                                            return "Heute " + root.heatmapData.todayHours + " · Gesamt " + root.heatmapData.totalHours
-                                        }
-                                        font.family: Style.font.family
-                                        font.pixelSize: Style.font.caption
-                                        color: root.hoveredCell ? root.fg : root.dim
-                                    }
-
-                                    Row {
-                                        spacing: Style.space(3)
                                         Text {
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            text: "weniger"
+                                            Layout.fillWidth: true
+                                            elide: Text.ElideRight
+                                            text: {
+                                                var c = root.hoveredCell
+                                                if (c) {
+                                                    var s = c.dateStr + " · " + c.focusTimeStr
+                                                    if (c.dominantTags && c.dominantTags.length > 0) s += " · " + c.dominantTags
+                                                    return s
+                                                }
+                                                return "Heute " + root.heatmapData.todayHours + " · Gesamt " + root.heatmapData.totalHours
+                                            }
                                             font.family: Style.font.family
-                                            font.pixelSize: Style.font.caption * 0.8
-                                            color: root.faint
+                                            font.pixelSize: Style.font.caption
+                                            color: root.hoveredCell ? root.fg : root.dim
                                         }
-                                        Repeater {
-                                            model: [0.07, 0.25, 0.5, 0.75, 1.0]
-                                            Rectangle {
+
+                                        Row {
+                                            spacing: Style.space(3)
+                                            Text {
                                                 anchors.verticalCenter: parent.verticalCenter
-                                                width: Style.space(9)
-                                                height: width
-                                                radius: Style.space(2)
-                                                color: index === 0
-                                                    ? Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.07)
-                                                    : Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, modelData)
+                                                text: "weniger"
+                                                font.family: Style.font.family
+                                                font.pixelSize: Style.font.caption * 0.8
+                                                color: root.faint
                                             }
-                                        }
-                                        Text {
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            text: "mehr"
-                                            font.family: Style.font.family
-                                            font.pixelSize: Style.font.caption * 0.8
-                                            color: root.faint
+                                            Repeater {
+                                                model: [0.07, 0.25, 0.5, 0.75, 1.0]
+                                                Rectangle {
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    width: Style.space(9)
+                                                    height: width
+                                                    radius: Style.space(2)
+                                                    color: index === 0
+                                                        ? Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.07)
+                                                        : Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, modelData)
+                                                }
+                                            }
+                                            Text {
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                text: "mehr"
+                                                font.family: Style.font.family
+                                                font.pixelSize: Style.font.caption * 0.8
+                                                color: root.faint
+                                            }
                                         }
                                     }
                                 }
