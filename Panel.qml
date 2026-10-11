@@ -21,7 +21,26 @@ Panel {
     property bool tagMenuOpen: false
     property real tagMenuX: 0
     property real tagMenuY: 0
+    property string activeColorTarget: "" // "" | "__new__" | tagName
+    property string newTagColor: ""       // "" (Auto) or custom hex for newly added tag
     property bool pomodoroSettingsOpen: false
+
+    readonly property var colorPalette: [
+        "#ef4444", // Rot
+        "#f97316", // Orange
+        "#f59e0b", // Bernstein
+        "#eab308", // Gelb
+        "#84cc16", // Limette
+        "#10b981", // Smaragd
+        "#14b8a6", // Türkis
+        "#06b6d4", // Cyan
+        "#3b82f6", // Blau
+        "#6366f1", // Indigo
+        "#8b5cf6", // Violett
+        "#d946ef", // Fuchsia
+        "#ec4899", // Pink
+        "#64748b"  // Schiefergrau
+    ]
 
     property string tagStatsScope: "week"   // "today" | "week" | "all"
     property string appScope: "today"       // "current" | "today" | "week" | "all"
@@ -84,9 +103,9 @@ Panel {
         : { apps: [], totalSeconds: 0, totalFormatted: "0 Min.", totalHours: "0.0 Std." }
 
     function colorForTag(name) {
-        var tags = w ? w.recentTags : []
-        var idx = tags.indexOf(name)
-        return Model.tagColor(name, idx)
+        if (!name) return Color.accent
+        var colors = w ? w.tagColors : null
+        return Model.tagColor(name, colors)
     }
 
     function getPomodoroDuration(phase) {
@@ -153,22 +172,26 @@ Panel {
         }
         var p = tagPill.mapToItem(keyCatcher, 0, 0)
         var menuW = tagMenu.width
-        root.tagMenuX = Math.max(0, Math.min(keyCatcher.width - menuW, p.x + tagPill.width / 2 - menuW / 2))
+        root.tagMenuX = Math.max(Style.space(8), Math.min(keyCatcher.width - menuW - Style.space(8), p.x + tagPill.width / 2 - menuW / 2))
         root.tagMenuY = p.y + tagPill.height + Style.space(6)
         root.tagMenuOpen = true
+        root.activeColorTarget = ""
+        root.newTagColor = ""
         Qt.callLater(function() { tagInput.forceActiveFocus() })
     }
 
     function closeTagMenu() {
         if (!root.tagMenuOpen) return
         root.tagMenuOpen = false
+        root.activeColorTarget = ""
+        root.newTagColor = ""
         tagInput.text = ""
         keyCatcher.forceActiveFocus()
     }
 
     function submitNewTag() {
         var t = tagInput.text.trim()
-        if (w && t.length > 0) w.addTag(t)
+        if (w && t.length > 0) w.addTag(t, root.newTagColor)
         root.closeTagMenu()
     }
 
@@ -1620,7 +1643,7 @@ Panel {
                 z: 51
                 x: root.tagMenuX
                 y: root.tagMenuY
-                width: Style.space(230)
+                width: Style.space(264)
                 height: tagMenuCol.implicitHeight + Style.space(16)
                 radius: Style.space(10)
                 color: Color.popups.background
@@ -1641,27 +1664,66 @@ Panel {
                     anchors.margins: Style.space(8)
                     spacing: Style.space(6)
 
-                    // Eingabe ganz oben: tippen → neues Fach anlegen
+                    // Eingabe ganz oben: Farb-Vorschau + tippen → neues Fach anlegen
                     RowLayout {
                         width: parent.width
                         spacing: Style.space(6)
 
+                        // Farbwähler-Button für neues Fach
+                        Rectangle {
+                            id: newTagColorBtn
+                            Layout.preferredWidth: Style.space(28)
+                            Layout.preferredHeight: Style.space(28)
+                            radius: Style.space(14)
+                            readonly property color previewCol: root.newTagColor.length > 0
+                                ? root.newTagColor
+                                : (tagInput.text.trim().length > 0 ? Model.tagColor(tagInput.text.trim(), root.w ? root.w.tagColors : null) : Color.accent)
+                            color: previewCol
+                            border.width: root.activeColorTarget === "__new__" ? 2 : 1
+                            border.color: root.activeColorTarget === "__new__" ? root.fg : Qt.rgba(0, 0, 0, 0.25)
+
+                            Text {
+                                anchors.centerIn: parent
+                                visible: root.newTagColor.length === 0 && tagInput.text.trim().length === 0
+                                text: "󰏘"
+                                font.family: Style.font.family
+                                font.pixelSize: Style.font.caption * 0.8
+                                color: "#ffffff"
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    root.activeColorTarget = (root.activeColorTarget === "__new__" ? "" : "__new__")
+                                }
+                            }
+
+                            PanelToolTip {
+                                visible: parent.containsMouse || false
+                                text: root.newTagColor.length > 0 ? ("Gewählte Farbe: " + root.newTagColor) : "Farbe wählen (optional)"
+                            }
+                        }
+
                         TextField {
                             id: tagInput
                             Layout.fillWidth: true
-                            Layout.preferredHeight: Style.space(30)
+                            Layout.preferredHeight: Style.space(28)
                             foreground: root.fg
                             placeholderText: "Neues Fach…"
                             font.family: Style.font.family
                             font.pixelSize: Style.font.bodySmall
                             maximumLength: 24
                             onAccepted: root.submitNewTag()
-                            Keys.onEscapePressed: root.closeTagMenu()
+                            Keys.onEscapePressed: {
+                                if (root.activeColorTarget.length > 0) root.activeColorTarget = ""
+                                else root.closeTagMenu()
+                            }
                         }
 
                         Rectangle {
-                            Layout.preferredWidth: Style.space(30)
-                            Layout.preferredHeight: Style.space(30)
+                            Layout.preferredWidth: Style.space(28)
+                            Layout.preferredHeight: Style.space(28)
                             radius: Style.space(6)
                             readonly property bool can: tagInput.text.trim().length > 0
                             color: can ? Color.accent : root.surface
@@ -1676,6 +1738,180 @@ Panel {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: root.submitNewTag()
+                            }
+                        }
+                    }
+
+                    // Ausklappbare Farbauswahl (für neues Fach oder ausgewähltes bestehendes Fach)
+                    Rectangle {
+                        id: colorPaletteCard
+                        visible: root.activeColorTarget.length > 0
+                        width: parent.width
+                        implicitHeight: colorPickerCol.implicitHeight + Style.space(12)
+                        radius: Style.space(8)
+                        color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.05)
+                        border.width: 1
+                        border.color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.35)
+
+                        Column {
+                            id: colorPickerCol
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            anchors.margins: Style.space(6)
+                            spacing: Style.space(6)
+
+                            // Titelzeile
+                            RowLayout {
+                                width: parent.width
+                                spacing: Style.space(6)
+
+                                Rectangle {
+                                    Layout.preferredWidth: Style.space(10)
+                                    Layout.preferredHeight: Style.space(10)
+                                    radius: Style.space(5)
+                                    color: root.activeColorTarget === "__new__"
+                                        ? (root.newTagColor.length > 0 ? root.newTagColor : Color.accent)
+                                        : root.colorForTag(root.activeColorTarget)
+                                }
+
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: root.activeColorTarget === "__new__"
+                                        ? "Farbe für neues Fach:"
+                                        : "Farbe für „" + root.activeColorTarget + "“:"
+                                    elide: Text.ElideRight
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.caption * 0.85
+                                    font.bold: true
+                                    color: root.fg
+                                }
+
+                                Text {
+                                    text: "✕"
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.caption
+                                    color: closePalMouse.containsMouse ? root.fg : root.dim
+
+                                    MouseArea {
+                                        id: closePalMouse
+                                        anchors.fill: parent
+                                        anchors.margins: -Style.space(4)
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: root.activeColorTarget = ""
+                                    }
+                                }
+                            }
+
+                            // 14 Swatches
+                            Flow {
+                                width: parent.width
+                                spacing: Style.space(5)
+
+                                Repeater {
+                                    model: root.colorPalette
+
+                                    Rectangle {
+                                        width: Style.space(22)
+                                        height: Style.space(22)
+                                        radius: Style.space(11)
+                                        color: modelData
+                                        readonly property bool isCurrent: {
+                                            if (root.activeColorTarget === "__new__") return root.newTagColor.toLowerCase() === modelData.toLowerCase()
+                                            var cur = root.w && root.w.tagColors && root.w.tagColors[root.activeColorTarget]
+                                            return cur && cur.toLowerCase() === modelData.toLowerCase()
+                                        }
+                                        border.width: isCurrent ? 2 : (swatchMouse.containsMouse ? 1.5 : 1)
+                                        border.color: isCurrent ? root.fg : (swatchMouse.containsMouse ? Color.accent : Qt.rgba(0, 0, 0, 0.25))
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            visible: parent.isCurrent
+                                            text: "✓"
+                                            font.family: Style.font.family
+                                            font.pixelSize: Style.font.caption * 0.75
+                                            font.bold: true
+                                            color: "#ffffff"
+                                        }
+
+                                        MouseArea {
+                                            id: swatchMouse
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                if (root.activeColorTarget === "__new__") {
+                                                    root.newTagColor = modelData
+                                                } else if (root.w) {
+                                                    root.w.setTagColor(root.activeColorTarget, modelData)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Hex-Eingabe + Auto-Button
+                            RowLayout {
+                                width: parent.width
+                                spacing: Style.space(6)
+
+                                TextField {
+                                    id: customHexInput
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: Style.space(24)
+                                    foreground: root.fg
+                                    placeholderText: "#HEX Code (z.B. #ff5500)"
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.caption * 0.85
+                                    maximumLength: 7
+                                    onAccepted: {
+                                        var h = text.trim()
+                                        if (h.length >= 3) {
+                                            if (h.indexOf("#") !== 0) h = "#" + h
+                                            if (root.activeColorTarget === "__new__") root.newTagColor = h
+                                            else if (root.w) root.w.setTagColor(root.activeColorTarget, h)
+                                            text = ""
+                                        }
+                                    }
+                                }
+
+                                Rectangle {
+                                    Layout.preferredHeight: Style.space(24)
+                                    Layout.preferredWidth: Style.space(42)
+                                    radius: Style.space(5)
+                                    color: autoBtnMouse.containsMouse ? root.surfaceHover : root.surface
+                                    border.width: 1
+                                    border.color: root.hairline
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "Auto"
+                                        font.family: Style.font.family
+                                        font.pixelSize: Style.font.caption * 0.8
+                                        color: root.dim
+                                    }
+
+                                    MouseArea {
+                                        id: autoBtnMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            if (root.activeColorTarget === "__new__") {
+                                                root.newTagColor = ""
+                                            } else if (root.w) {
+                                                root.w.setTagColor(root.activeColorTarget, "")
+                                            }
+                                        }
+                                    }
+
+                                    PanelToolTip {
+                                        visible: autoBtnMouse.containsMouse
+                                        text: "Automatische Standardfarbe verwenden"
+                                    }
+                                }
                             }
                         }
                     }
@@ -1708,24 +1944,47 @@ Panel {
                         delegate: Rectangle {
                             readonly property bool sel: modelData === root.activeTag
                             readonly property color tagCol: root.colorForTag(modelData)
+                            readonly property bool isColorTarget: root.activeColorTarget === modelData
                             width: tagMenuList.width
                             height: tagMenuList.rowH
                             radius: Style.space(6)
-                            color: sel ? Qt.rgba(tagCol.r, tagCol.g, tagCol.b, 0.18)
-                                       : (rowMouse.containsMouse ? root.surfaceHover : "transparent")
+                            color: isColorTarget
+                                ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.22)
+                                : (sel ? Qt.rgba(tagCol.r, tagCol.g, tagCol.b, 0.18)
+                                       : (rowMouse.containsMouse ? root.surfaceHover : "transparent"))
 
                             RowLayout {
                                 anchors.fill: parent
                                 anchors.leftMargin: Style.space(8)
                                 anchors.rightMargin: Style.space(6)
-                                spacing: Style.space(8)
+                                spacing: Style.space(6)
 
+                                // Klickbarer Farbpunkt
                                 Rectangle {
-                                    Layout.preferredWidth: Style.space(8)
-                                    Layout.preferredHeight: Style.space(8)
-                                    radius: Style.space(4)
+                                    Layout.preferredWidth: Style.space(12)
+                                    Layout.preferredHeight: Style.space(12)
+                                    radius: Style.space(6)
                                     color: tagCol
+                                    border.width: isColorTarget ? 2 : (dotMouse.containsMouse ? 1.5 : 1)
+                                    border.color: isColorTarget ? Color.accent : (dotMouse.containsMouse ? root.fg : Qt.rgba(0, 0, 0, 0.2))
+
+                                    MouseArea {
+                                        id: dotMouse
+                                        anchors.fill: parent
+                                        anchors.margins: -Style.space(4)
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            root.activeColorTarget = (root.activeColorTarget === modelData ? "" : modelData)
+                                        }
+                                    }
+
+                                    PanelToolTip {
+                                        visible: dotMouse.containsMouse
+                                        text: "Farbe für „" + modelData + "“ anpassen"
+                                    }
                                 }
+
                                 Text {
                                     Layout.fillWidth: true
                                     elide: Text.ElideRight
@@ -1735,13 +1994,42 @@ Panel {
                                     font.bold: sel
                                     color: root.fg
                                 }
+
+                                // Farbpalette-Icon
                                 Text {
-                                    visible: sel && !rowMouse.containsMouse
+                                    visible: isColorTarget || rowMouse.containsMouse
+                                    text: "󰏘"
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.caption
+                                    color: isColorTarget ? Color.accent : (palIconMouse.containsMouse ? Color.accent : root.dim)
+
+                                    MouseArea {
+                                        id: palIconMouse
+                                        anchors.fill: parent
+                                        anchors.margins: -Style.space(4)
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            root.activeColorTarget = (root.activeColorTarget === modelData ? "" : modelData)
+                                        }
+                                    }
+
+                                    PanelToolTip {
+                                        visible: palIconMouse.containsMouse
+                                        text: "Farbe anpassen"
+                                    }
+                                }
+
+                                // Haken wenn aktiv
+                                Text {
+                                    visible: sel && !rowMouse.containsMouse && !isColorTarget
                                     text: "󰄬"
                                     font.family: Style.font.family
                                     font.pixelSize: Style.font.caption
                                     color: tagCol
                                 }
+
+                                // Papierkorb
                                 Text {
                                     visible: rowMouse.containsMouse
                                     text: "󰆴"
@@ -1755,7 +2043,15 @@ Panel {
                                         anchors.margins: -Style.space(4)
                                         hoverEnabled: true
                                         cursorShape: Qt.PointingHandCursor
-                                        onClicked: if (root.w) root.w.removeTag(modelData)
+                                        onClicked: if (root.w) {
+                                            if (root.activeColorTarget === modelData) root.activeColorTarget = ""
+                                            root.w.removeTag(modelData)
+                                        }
+                                    }
+
+                                    PanelToolTip {
+                                        visible: trashMouse.containsMouse
+                                        text: "Fach löschen"
                                     }
                                 }
                             }
@@ -1763,7 +2059,8 @@ Panel {
                             MouseArea {
                                 id: rowMouse
                                 anchors.fill: parent
-                                anchors.rightMargin: Style.space(24)
+                                anchors.leftMargin: Style.space(20)
+                                anchors.rightMargin: Style.space(44)
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: {

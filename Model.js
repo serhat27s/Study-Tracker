@@ -53,22 +53,42 @@ function formatUptime(totalSec) {
 }
 
 var TAG_COLORS = [
-    "#e84393", // Pink
-    "#4cd137", // Green
-    "#00a8ff", // Blue
-    "#c56cf0", // Lavender
-    "#fdcb6e", // Yellow
-    "#ff6b6b", // Red
-    "#10ac84", // Teal
-    "#575fcf"  // Indigo
+    "#3b82f6", // Blue
+    "#10b981", // Emerald
+    "#f59e0b", // Amber
+    "#ec4899", // Pink
+    "#8b5cf6", // Purple
+    "#06b6d4", // Cyan
+    "#ef4444", // Red
+    "#84cc16", // Lime
+    "#6366f1", // Indigo
+    "#14b8a6", // Teal
+    "#d946ef", // Fuchsia
+    "#eab308", // Yellow
+    "#f97316", // Orange
+    "#64748b"  // Slate
 ];
 
-function tagColor(tagName, index) {
-    if (typeof index === "number" && index >= 0) {
-        return TAG_COLORS[index % TAG_COLORS.length];
+var DEFAULT_TAG_COLORS = {
+    "Mathe": "#3b82f6",
+    "Programmieren": "#10b981",
+    "Physik": "#8b5cf6",
+    "Lesen": "#f59e0b",
+    "Recherche": "#06b6d4",
+    "Allgemein": "#64748b"
+};
+
+function tagColor(tagName, customMap) {
+    var tag = String(tagName || "").trim();
+    if (!tag) return TAG_COLORS[0];
+    if (customMap && typeof customMap === "object" && customMap[tag]) {
+        return customMap[tag];
+    }
+    if (DEFAULT_TAG_COLORS[tag]) {
+        return DEFAULT_TAG_COLORS[tag];
     }
     var hash = 0;
-    var str = String(tagName || "");
+    var str = tag.toLowerCase();
     for (var i = 0; i < str.length; i++) {
         hash = ((hash << 5) - hash) + str.charCodeAt(i);
         hash |= 0;

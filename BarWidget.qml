@@ -21,6 +21,7 @@ BarWidget {
 
     property string activeTag: "Mathe"
     property var recentTags: ["Mathe", "Programmieren", "Physik", "Lesen", "Recherche"]
+    property var tagColors: ({})
 
     property int remainingSeconds: 1500
     property int elapsedSeconds: 0
@@ -96,6 +97,9 @@ BarWidget {
                     if (parsed && Array.isArray(parsed.recentTags) && parsed.recentTags.length > 0) {
                         root.recentTags = parsed.recentTags
                     }
+                    if (parsed && parsed.tagColors && typeof parsed.tagColors === "object") {
+                        root.tagColors = parsed.tagColors
+                    }
                     if (parsed.pomodoroWorkDuration && Number(parsed.pomodoroWorkDuration) > 0)
                         root.pomodoroWorkDuration = Number(parsed.pomodoroWorkDuration)
                     if (parsed.pomodoroShortBreakDuration && Number(parsed.pomodoroShortBreakDuration) > 0)
@@ -132,6 +136,7 @@ BarWidget {
         var payload = {
             history: root.history,
             recentTags: root.recentTags,
+            tagColors: root.tagColors,
             pomodoroWorkDuration: root.pomodoroWorkDuration,
             pomodoroShortBreakDuration: root.pomodoroShortBreakDuration,
             pomodoroLongBreakDuration: root.pomodoroLongBreakDuration,
@@ -346,7 +351,7 @@ BarWidget {
         root.saveToDisk()
     }
 
-    function addTag(tag) {
+    function addTag(tag, customColor) {
         var clean = String(tag).trim()
         if (clean.length === 0) return
         root.activeTag = clean
@@ -356,8 +361,30 @@ BarWidget {
             tags.splice(idx, 1)
         }
         tags.unshift(clean)
-        if (tags.length > 12) tags = tags.slice(0, 12)
+        if (tags.length > 20) tags = tags.slice(0, 20)
         root.recentTags = tags
+        if (customColor && String(customColor).trim().length > 0) {
+            var c = String(customColor).trim()
+            if (c.indexOf("#") !== 0) c = "#" + c
+            var nextColors = Object.assign({}, root.tagColors)
+            nextColors[clean] = c
+            root.tagColors = nextColors
+        }
+        root.saveToDisk()
+    }
+
+    function setTagColor(tag, colorHex) {
+        var clean = String(tag).trim()
+        if (clean.length === 0) return
+        var next = Object.assign({}, root.tagColors)
+        if (colorHex && String(colorHex).trim().length > 0) {
+            var c = String(colorHex).trim()
+            if (c.indexOf("#") !== 0) c = "#" + c
+            next[clean] = c
+        } else {
+            delete next[clean]
+        }
+        root.tagColors = next
         root.saveToDisk()
     }
 
@@ -371,6 +398,11 @@ BarWidget {
             root.recentTags = tags
             if (root.activeTag === clean) {
                 root.activeTag = tags[0]
+            }
+            if (root.tagColors && root.tagColors[clean]) {
+                var nextColors = Object.assign({}, root.tagColors)
+                delete nextColors[clean]
+                root.tagColors = nextColors
             }
             root.saveToDisk()
         }
