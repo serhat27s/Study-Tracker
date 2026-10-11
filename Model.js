@@ -148,10 +148,10 @@ function aggregateTagStats(history, scope) {
 }
 
 // -----------------------------------------------------------------------------
-// 7-Zeilen GitHub Aktivitätsgraph (Montag bis Sonntag)
+// 7-Zeilen GitHub Aktivitätsgraph: Kalenderjahr (Januar bis Dezember)
 // -----------------------------------------------------------------------------
-function buildHeatmap(history, numWeeks) {
-    if (!numWeeks || numWeeks < 1) numWeeks = 52;
+function buildHeatmap(history, year) {
+    var targetYear = (typeof year === "number" && year >= 2000) ? Math.round(year) : new Date().getFullYear();
     var historyList = Array.isArray(history) ? history : [];
 
     var dayMap = {};
@@ -169,15 +169,24 @@ function buildHeatmap(history, numWeeks) {
 
     var today = new Date();
     var todayDk = dateKey(today);
-    // Montag = 0, Sonntag = 6
-    var todayDayOfWeek = (today.getDay() + 6) % 7;
 
-    var currentMon = new Date(today.getFullYear(), today.getMonth(), today.getDate() - todayDayOfWeek);
-    currentMon.setHours(0, 0, 0, 0);
+    // Start: Montag der Woche, die den 1. Januar enthält
+    var jan1 = new Date(targetYear, 0, 1);
+    var jan1Day = (jan1.getDay() + 6) % 7; // Montag = 0, Sonntag = 6
+    var startMon = new Date(targetYear, 0, 1 - jan1Day);
+    startMon.setHours(0, 0, 0, 0);
 
-    var startMon = new Date(currentMon.getTime() - (numWeeks - 1) * 7 * 86400000);
+    // Ende: Sonntag der Woche, die den 31. Dezember enthält
+    var dec31 = new Date(targetYear, 11, 31);
+    var dec31Day = (dec31.getDay() + 6) % 7;
+    var endSun = new Date(targetYear, 11, 31 + (6 - dec31Day));
+    endSun.setHours(23, 59, 59, 999);
+
+    var totalDays = Math.round((endSun.getTime() - startMon.getTime()) / 86400000) + 1;
+    var numWeeks = Math.round(totalDays / 7);
 
     var weeks = [];
+    var yearSecondsLogged = 0;
     var totalSecondsLogged = 0;
     var todaySeconds = (dayMap[todayDk] ? dayMap[todayDk].totalSeconds : 0);
 
@@ -185,17 +194,20 @@ function buildHeatmap(history, numWeeks) {
         var days = [];
         var monthLabel = "";
         for (var d = 0; d < 7; d++) {
-            var cellDate = new Date(startMon.getTime() + (w * 7 + d) * 86400000);
+            var cellDate = new Date(startMon.getFullYear(), startMon.getMonth(), startMon.getDate() + w * 7 + d);
             var dk = dateKey(cellDate);
-            var isFuture = cellDate.getTime() > today.getTime() && dk !== todayDk;
+            var isOutsideYear = (cellDate.getFullYear() !== targetYear);
+            var isFuture = (cellDate.getTime() > today.getTime() && dk !== todayDk);
             var isToday = (dk === todayDk);
             var info = dayMap[dk] || { totalSeconds: 0, tags: {} };
             var sec = info.totalSeconds;
             var mins = Math.round(sec / 60);
 
-            // Prüfen, ob in dieser Woche ein neuer Monat beginnt
-            if (cellDate.getDate() === 1 || (w === 0 && d === 0 && cellDate.getDate() < 18)) {
-                monthLabel = MONAT_NAMEN[cellDate.getMonth()];
+            if (!isOutsideYear) {
+                yearSecondsLogged += sec;
+                if (cellDate.getDate() === 1 || (w === 0 && cellDate.getDate() === jan1.getDate())) {
+                    monthLabel = MONAT_NAMEN[cellDate.getMonth()];
+                }
             }
 
             var level = 0;
@@ -220,6 +232,7 @@ function buildHeatmap(history, numWeeks) {
                 weekIndex: w,
                 isToday: isToday,
                 isFuture: isFuture,
+                isOutsideYear: isOutsideYear,
                 totalSeconds: sec,
                 totalMinutes: mins,
                 focusTimeStr: sec > 0 ? formatDurationHuman(sec) : "0 Min.",
@@ -255,11 +268,15 @@ function buildHeatmap(history, numWeeks) {
     }
 
     return {
+        year: targetYear,
         weeks: weeks,
         totalSeconds: totalSecondsLogged,
+        yearSeconds: yearSecondsLogged,
         todaySeconds: todaySeconds,
         todayFormatted: formatDurationHuman(todaySeconds),
         todayHours: formatHoursDecimal(todaySeconds),
+        yearFormatted: formatDurationHuman(yearSecondsLogged),
+        yearHours: formatHoursDecimal(yearSecondsLogged),
         totalFormatted: formatDurationHuman(totalSecondsLogged),
         totalHours: formatHoursDecimal(totalSecondsLogged),
         streakDays: streak,

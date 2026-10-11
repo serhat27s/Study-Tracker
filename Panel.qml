@@ -27,9 +27,10 @@ Panel {
     property string appScope: "today"       // "current" | "today" | "week" | "all"
     property string appTagFilter: ""        // "" = alle Fächer
     property var hoveredCell: null
+    property int heatmapYear: new Date().getFullYear()
 
-    // Feste Panelgröße – angepasst auf 52-Wochen Ganzjahres-Aktivitätsgrid
-    readonly property int panelWidth: Style.space(820)
+    // Feste Panelgröße – angepasst auf Ganzjahres-Aktivitätsgrid (Januar bis Dezember)
+    readonly property int panelWidth: Style.space(840)
     readonly property int panelInnerHeight: Style.space(580)
 
     readonly property color fg: root.barForeground
@@ -56,11 +57,9 @@ Panel {
         return (w.elapsedSeconds % 3600) / 3600
     }
 
-    readonly property int heatmapWeeks: 52
-
     readonly property var heatmapData: w
-        ? Model.buildHeatmap(w.history, root.heatmapWeeks)
-        : { weeks: [], totalSeconds: 0, todaySeconds: 0, todayHours: "0.0 Std.", totalHours: "0.0 Std.", streakDays: 0, sessionCount: 0 }
+        ? Model.buildHeatmap(w.history, root.heatmapYear)
+        : { year: root.heatmapYear, weeks: [], totalSeconds: 0, yearHours: "0.0 Std.", todayHours: "0.0 Std.", totalHours: "0.0 Std.", streakDays: 0, sessionCount: 0 }
 
     readonly property var tagStatsData: w
         ? Model.aggregateTagStats(w.history, root.tagStatsScope)
@@ -882,10 +881,76 @@ Panel {
                                         width: parent.width
 
                                         SectionLabel {
-                                            Layout.fillWidth: true
                                             fg: root.fg
-                                            text: "AKTIVITÄT (52 WOCHEN — GANZES JAHR)"
+                                            text: "AKTIVITÄT " + root.heatmapYear + " (JANUAR — DEZEMBER)"
                                         }
+
+                                        // Jahr-Umschalter
+                                        Row {
+                                            spacing: Style.space(2)
+
+                                            Rectangle {
+                                                width: Style.space(20)
+                                                height: Style.space(20)
+                                                radius: Style.space(4)
+                                                color: prevYearMouse.containsMouse ? root.surfaceHover : "transparent"
+                                                border.width: 1
+                                                border.color: root.hairline
+
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: "󰅁"
+                                                    font.family: Style.font.family
+                                                    font.pixelSize: Style.font.caption
+                                                    color: root.dim
+                                                }
+
+                                                MouseArea {
+                                                    id: prevYearMouse
+                                                    anchors.fill: parent
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: root.heatmapYear--
+                                                }
+
+                                                PanelToolTip {
+                                                    visible: prevYearMouse.containsMouse
+                                                    text: "Vorheriges Jahr (" + (root.heatmapYear - 1) + ")"
+                                                }
+                                            }
+
+                                            Rectangle {
+                                                width: Style.space(20)
+                                                height: Style.space(20)
+                                                radius: Style.space(4)
+                                                color: nextYearMouse.containsMouse ? root.surfaceHover : "transparent"
+                                                border.width: 1
+                                                border.color: root.hairline
+                                                opacity: root.heatmapYear >= new Date().getFullYear() ? 0.35 : 1.0
+
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: "󰅂"
+                                                    font.family: Style.font.family
+                                                    font.pixelSize: Style.font.caption
+                                                    color: root.dim
+                                                }
+
+                                                MouseArea {
+                                                    id: nextYearMouse
+                                                    anchors.fill: parent
+                                                    enabled: root.heatmapYear < new Date().getFullYear()
+                                                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                    onClicked: root.heatmapYear++
+                                                }
+
+                                                PanelToolTip {
+                                                    visible: nextYearMouse.containsMouse
+                                                    text: "Nächstes Jahr (" + (root.heatmapYear + 1) + ")"
+                                                }
+                                            }
+                                        }
+
+                                        Item { Layout.fillWidth: true }
 
                                         Text {
                                             text: "󰈸 " + root.heatmapData.streakDays + " Tage Streak"
@@ -896,7 +961,7 @@ Panel {
                                         }
                                     }
 
-                                    // 52-Wochen Grid (Ganzes Jahr auf einen Blick, ohne Scrollen)
+                                    // Kalenderjahr-Grid (Januar bis Dezember auf einen Blick, ohne Scrollen)
                                     Row {
                                         anchors.horizontalCenter: parent.horizontalCenter
                                         spacing: Style.space(6)
@@ -920,11 +985,11 @@ Panel {
                                             }
                                         }
 
-                                        // 52 Wochen
+                                        // Kalenderwochen des Jahres
                                         Column {
                                             spacing: Style.space(3)
 
-                                            // Monatsbeschriftung oben
+                                            // Monatsbeschriftung oben (Jan bis Dez)
                                             Row {
                                                 spacing: Style.space(3)
 
@@ -946,7 +1011,7 @@ Panel {
                                                 }
                                             }
 
-                                            // 52 Wochenspalten
+                                            // Wochenspalten
                                             Row {
                                                 spacing: Style.space(3)
 
@@ -964,12 +1029,13 @@ Panel {
                                                                 height: Style.space(11)
                                                                 radius: Style.space(2)
                                                                 color: {
-                                                                    if (modelData.isFuture) return "transparent"
+                                                                    if (modelData.isOutsideYear) return "transparent"
                                                                     if (modelData.level === 4) return Color.accent
                                                                     if (modelData.level === 3) return Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.75)
                                                                     if (modelData.level === 2) return Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.50)
                                                                     if (modelData.level === 1) return Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.25)
-                                                                    return Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.07)
+                                                                    if (modelData.isFuture) return Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.04)
+                                                                    return Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.08)
                                                                 }
                                                                 border.width: (modelData.isToday || cellMouse.containsMouse) ? 1 : 0
                                                                 border.color: cellMouse.containsMouse ? root.fg : Color.accent
@@ -977,7 +1043,7 @@ Panel {
                                                                 MouseArea {
                                                                     id: cellMouse
                                                                     anchors.fill: parent
-                                                                    hoverEnabled: !modelData.isFuture
+                                                                    hoverEnabled: !modelData.isOutsideYear
                                                                     onEntered: root.hoveredCell = modelData
                                                                     onExited: if (root.hoveredCell === modelData) root.hoveredCell = null
                                                                 }
@@ -1001,11 +1067,17 @@ Panel {
                                             text: {
                                                 var c = root.hoveredCell
                                                 if (c) {
-                                                    var s = c.dateStr + " · " + c.focusTimeStr
-                                                    if (c.dominantTags && c.dominantTags.length > 0) s += " · " + c.dominantTags
+                                                    var s = c.dateStr
+                                                    if (c.isFuture) s += " · Zukünftiger Tag"
+                                                    else if (c.totalSeconds > 0) {
+                                                        s += " · " + c.focusTimeStr
+                                                        if (c.dominantTags && c.dominantTags.length > 0) s += " · " + c.dominantTags
+                                                    } else {
+                                                        s += " · Keine Aktivität"
+                                                    }
                                                     return s
                                                 }
-                                                return "Heute " + root.heatmapData.todayHours + " · Gesamt " + root.heatmapData.totalHours
+                                                return root.heatmapData.year + ": " + root.heatmapData.yearHours + " gelernt · Heute " + root.heatmapData.todayHours
                                             }
                                             font.family: Style.font.family
                                             font.pixelSize: Style.font.caption
