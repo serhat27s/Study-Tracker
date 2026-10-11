@@ -54,9 +54,9 @@ Panel {
     property var hoveredCell: null
     property int heatmapYear: new Date().getFullYear()
 
-    // Fixed panel dimensions: 420x560 compact standard
-    readonly property int panelWidth: Style.space(420)
-    readonly property int panelInnerHeight: Style.space(560)
+    // Panel dimensions: 440x590 for comfortable typography and layout
+    readonly property int panelWidth: Style.space(440)
+    readonly property int panelInnerHeight: Style.space(590)
 
     readonly property color fg: root.barForeground
     readonly property color dim: Qt.darker(fg, 1.5)
@@ -237,10 +237,10 @@ Panel {
         property var options: []        // [{ value, label, icon? }]
         property string value: ""
         property color fg: Color.foreground
-        property real fontSize: Style.font.caption
+        property real fontSize: Style.font.bodySmall
         signal picked(string value)
 
-        implicitHeight: Style.space(28)
+        implicitHeight: Style.space(30)
         radius: Style.space(8)
         color: Qt.rgba(fg.r, fg.g, fg.b, 0.06)
 
@@ -301,7 +301,7 @@ Panel {
         property color fg: Color.foreground
         property color valueColor: fg
 
-        implicitHeight: Style.space(50)
+        implicitHeight: Style.space(54)
         radius: Style.space(8)
         color: Qt.rgba(fg.r, fg.g, fg.b, 0.05)
 
@@ -316,8 +316,9 @@ Panel {
                 elide: Text.ElideRight
                 text: tile.label
                 font.family: Style.font.family
-                font.pixelSize: Style.font.caption * 0.85
+                font.pixelSize: Style.font.caption
                 font.bold: true
+                font.letterSpacing: 0.5
                 color: Qt.darker(tile.fg, 1.5)
             }
             Text {
@@ -326,7 +327,7 @@ Panel {
                 elide: Text.ElideRight
                 text: tile.value
                 font.family: Style.font.family
-                font.pixelSize: Style.font.subtitle
+                font.pixelSize: Style.font.heading
                 font.bold: true
                 color: tile.valueColor
             }
@@ -339,7 +340,7 @@ Panel {
         textFormat: Text.PlainText
         elide: Text.ElideRight
         font.family: Style.font.family
-        font.pixelSize: Style.font.caption
+        font.pixelSize: Style.font.bodySmall
         font.bold: true
         font.letterSpacing: 0.6
         color: Qt.darker(fg, 1.5)
@@ -381,7 +382,7 @@ Panel {
             wrapMode: Text.WordWrap
             text: es.title
             font.family: Style.font.family
-            font.pixelSize: Style.font.bodySmall
+            font.pixelSize: Style.font.body
             font.bold: true
             color: es.fg
         }
@@ -392,7 +393,7 @@ Panel {
             wrapMode: Text.WordWrap
             text: es.description
             font.family: Style.font.family
-            font.pixelSize: Style.font.caption
+            font.pixelSize: Style.font.bodySmall
             lineHeight: 1.25
             color: es.dimColor
         }
@@ -440,9 +441,9 @@ Panel {
                 // -------------------------------------------------------------
                 Segmented {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Style.space(30)
+                    Layout.preferredHeight: Style.space(34)
                     fg: root.fg
-                    fontSize: Style.font.bodySmall
+                    fontSize: Style.font.body
                     value: "" + root.currentTab
                     options: [
                         { value: "0", label: "Focus", icon: "󰔛" },
@@ -531,7 +532,7 @@ Panel {
                                                 id: tagPill
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 readonly property color tagCol: root.colorForTag(root.activeTag)
-                                                height: Style.space(28)
+                                                height: Style.space(30)
                                                 width: tagPillRow.implicitWidth + Style.space(20)
                                                 radius: height / 2
                                                 color: tagPillMouse.containsMouse || root.tagMenuOpen
@@ -558,7 +559,7 @@ Panel {
                                                         elide: Text.ElideRight
                                                         text: root.activeTag
                                                         font.family: Style.font.family
-                                                        font.pixelSize: Style.font.bodySmall
+                                                        font.pixelSize: Style.font.body
                                                         font.bold: true
                                                         color: root.fg
                                                     }
@@ -566,7 +567,7 @@ Panel {
                                                         anchors.verticalCenter: parent.verticalCenter
                                                         text: root.tagMenuOpen ? "󰅃" : "󰅀"
                                                         font.family: Style.font.family
-                                                        font.pixelSize: Style.font.caption
+                                                        font.pixelSize: Style.font.bodySmall
                                                         color: root.dim
                                                     }
                                                 }
@@ -585,7 +586,7 @@ Panel {
                                     // Phase / Status
                                     Item {
                                         width: parent.width
-                                        height: Style.space(16)
+                                        height: Style.space(18)
 
                                         Row {
                                             anchors.centerIn: parent
@@ -606,7 +607,7 @@ Panel {
                                                     return "Focus (" + Math.round(root.w.pomodoroWorkDuration / 60) + "m)" + state
                                                 }
                                                 font.family: Style.font.family
-                                                font.pixelSize: Style.font.caption
+                                                font.pixelSize: Style.font.bodySmall
                                                 color: root.dim
                                             }
 
@@ -620,7 +621,7 @@ Panel {
                                                     model: 4
                                                     Rectangle {
                                                         readonly property int done: root.w ? root.w.pomodoroCyclesCompleted % 4 : 0
-                                                        width: Style.space(6)
+                                                        width: Style.space(7)
                                                         height: width
                                                         radius: width / 2
                                                         color: index < done ? Color.accent : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.18)
@@ -654,7 +655,7 @@ Panel {
 
                                         Segmented {
                                             Layout.fillWidth: true
-                                            Layout.preferredHeight: Style.space(26)
+                                            Layout.preferredHeight: Style.space(28)
                                             fg: root.fg
                                             value: root.currentPomodoroPreset
                                             options: [
@@ -672,8 +673,8 @@ Panel {
 
                                         // Button to open Pomodoro duration settings
                                         Rectangle {
-                                            Layout.preferredWidth: Style.space(26)
-                                            Layout.preferredHeight: Style.space(26)
+                                            Layout.preferredWidth: Style.space(28)
+                                            Layout.preferredHeight: Style.space(28)
                                             radius: Style.space(6)
                                             color: root.pomodoroSettingsOpen
                                                 ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.25)
@@ -685,7 +686,7 @@ Panel {
                                                 anchors.centerIn: parent
                                                 text: "󰒓"
                                                 font.family: Style.font.family
-                                                font.pixelSize: Style.font.caption
+                                                font.pixelSize: Style.font.bodySmall
                                                 color: root.pomodoroSettingsOpen ? Color.accent : root.fg
                                             }
 
@@ -728,7 +729,7 @@ Panel {
                                                 Text {
                                                     text: "ADJUST POMODORO TIMES"
                                                     font.family: Style.font.family
-                                                    font.pixelSize: Style.font.caption * 0.85
+                                                    font.pixelSize: Style.font.caption
                                                     font.bold: true
                                                     color: Color.accent
                                                 }
@@ -738,7 +739,7 @@ Panel {
                                                 Text {
                                                     text: "✕"
                                                     font.family: Style.font.family
-                                                    font.pixelSize: Style.font.caption
+                                                    font.pixelSize: Style.font.bodySmall
                                                     color: closePomoMouse.containsMouse ? root.fg : root.dim
 
                                                     MouseArea {
@@ -775,7 +776,7 @@ Panel {
                                                     Text {
                                                         text: modelData.icon + " " + modelData.label
                                                         font.family: Style.font.family
-                                                        font.pixelSize: Style.font.caption
+                                                        font.pixelSize: Style.font.bodySmall
                                                         color: root.fg
                                                         Layout.fillWidth: true
                                                     }
@@ -786,8 +787,8 @@ Panel {
 
                                                         // Minus Button
                                                         Rectangle {
-                                                            width: Style.space(24)
-                                                            height: Style.space(24)
+                                                            width: Style.space(26)
+                                                            height: Style.space(26)
                                                             radius: Style.space(5)
                                                             color: minusMouse.containsMouse ? root.surfaceHover : root.surface
                                                             border.width: 1
@@ -797,7 +798,7 @@ Panel {
                                                                 anchors.centerIn: parent
                                                                 text: "−"
                                                                 font.family: Style.font.family
-                                                                font.pixelSize: Style.font.bodySmall
+                                                                font.pixelSize: Style.font.body
                                                                 font.bold: true
                                                                 color: root.fg
                                                             }
@@ -818,8 +819,8 @@ Panel {
 
                                                         // Minutes display
                                                         Rectangle {
-                                                            width: Style.space(54)
-                                                            height: Style.space(24)
+                                                            width: Style.space(58)
+                                                            height: Style.space(26)
                                                             radius: Style.space(5)
                                                             color: root.surface
                                                             border.width: 1
@@ -829,7 +830,7 @@ Panel {
                                                                 anchors.centerIn: parent
                                                                 text: Math.round(stepperRow.currentSec / 60) + " min"
                                                                 font.family: Style.font.family
-                                                                font.pixelSize: Style.font.caption
+                                                                font.pixelSize: Style.font.bodySmall
                                                                 font.bold: true
                                                                 color: Color.accent
                                                             }
@@ -837,8 +838,8 @@ Panel {
 
                                                         // Plus Button
                                                         Rectangle {
-                                                            width: Style.space(24)
-                                                            height: Style.space(24)
+                                                            width: Style.space(26)
+                                                            height: Style.space(26)
                                                             radius: Style.space(5)
                                                             color: plusMouse.containsMouse ? root.surfaceHover : root.surface
                                                             border.width: 1
@@ -848,7 +849,7 @@ Panel {
                                                                 anchors.centerIn: parent
                                                                 text: "+"
                                                                 font.family: Style.font.family
-                                                                font.pixelSize: Style.font.bodySmall
+                                                                font.pixelSize: Style.font.body
                                                                 font.bold: true
                                                                 color: root.fg
                                                             }
@@ -880,7 +881,7 @@ Panel {
                                         elide: Text.ElideRight
                                         text: "Studied today: " + root.heatmapData.todayHours
                                         font.family: Style.font.family
-                                        font.pixelSize: Style.font.caption
+                                        font.pixelSize: Style.font.bodySmall
                                         color: root.dim
                                     }
 
@@ -892,7 +893,7 @@ Panel {
                                         // Primary Start/Pause button
                                         Rectangle {
                                             Layout.fillWidth: true
-                                            Layout.preferredHeight: Style.space(34)
+                                            Layout.preferredHeight: Style.space(36)
                                             radius: Style.space(8)
                                             color: root.running
                                                 ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, startMouse.containsMouse ? 0.30 : 0.20)
@@ -926,8 +927,8 @@ Panel {
                                                 || (root.isPomodoro && root.w.remainingSeconds !== root.phaseTotal)
                                                 || (!root.isPomodoro && root.w.elapsedSeconds > 0)
                                             )
-                                            Layout.preferredWidth: Style.space(34)
-                                            Layout.preferredHeight: Style.space(34)
+                                            Layout.preferredWidth: Style.space(36)
+                                            Layout.preferredHeight: Style.space(36)
                                             radius: Style.space(8)
                                             color: resetMouse.containsMouse && canReset ? root.surfaceHover : root.surface
                                             border.width: 1
@@ -991,8 +992,8 @@ Panel {
 
                                             // Left (earlier months)
                                             Rectangle {
-                                                width: Style.space(20)
-                                                height: Style.space(20)
+                                                width: Style.space(22)
+                                                height: Style.space(22)
                                                 radius: Style.space(4)
                                                 color: scrollLeftMouse.containsMouse ? root.surfaceHover : "transparent"
                                                 border.width: 1
@@ -1002,7 +1003,7 @@ Panel {
                                                     anchors.centerIn: parent
                                                     text: "󰅁"
                                                     font.family: Style.font.family
-                                                    font.pixelSize: Style.font.caption
+                                                    font.pixelSize: Style.font.bodySmall
                                                     color: root.dim
                                                 }
 
@@ -1026,8 +1027,8 @@ Panel {
 
                                             // Right (later months)
                                             Rectangle {
-                                                width: Style.space(20)
-                                                height: Style.space(20)
+                                                width: Style.space(22)
+                                                height: Style.space(22)
                                                 radius: Style.space(4)
                                                 color: scrollRightMouse.containsMouse ? root.surfaceHover : "transparent"
                                                 border.width: 1
@@ -1037,7 +1038,7 @@ Panel {
                                                     anchors.centerIn: parent
                                                     text: "󰅂"
                                                     font.family: Style.font.family
-                                                    font.pixelSize: Style.font.caption
+                                                    font.pixelSize: Style.font.bodySmall
                                                     color: root.dim
                                                 }
 
@@ -1062,7 +1063,7 @@ Panel {
 
                                             // Today Button
                                             Rectangle {
-                                                height: Style.space(20)
+                                                height: Style.space(22)
                                                 implicitWidth: todayLabel.implicitWidth + Style.space(10)
                                                 radius: Style.space(4)
                                                 color: todayMouse.containsMouse ? root.surfaceHover : "transparent"
@@ -1074,7 +1075,7 @@ Panel {
                                                     anchors.centerIn: parent
                                                     text: "Today"
                                                     font.family: Style.font.family
-                                                    font.pixelSize: Style.font.caption * 0.82
+                                                    font.pixelSize: Style.font.caption
                                                     color: root.fg
                                                 }
 
@@ -1102,7 +1103,7 @@ Panel {
                                         Text {
                                             text: "󰈸 " + root.heatmapData.streakDays + (root.heatmapData.streakDays === 1 ? " Day Streak" : " Days Streak")
                                             font.family: Style.font.family
-                                            font.pixelSize: Style.font.caption
+                                            font.pixelSize: Style.font.bodySmall
                                             font.bold: true
                                             color: root.heatmapData.streakDays > 0 ? Color.accent : root.dim
                                         }
@@ -1122,11 +1123,11 @@ Panel {
                                             Repeater {
                                                 model: ["Mon", "", "Wed", "", "Fri", "", "Sun"]
                                                 Text {
-                                                    width: Style.space(18)
+                                                    width: Style.space(22)
                                                     height: Style.space(11)
                                                     text: modelData
                                                     font.family: Style.font.family
-                                                    font.pixelSize: Style.font.caption * 0.72
+                                                    font.pixelSize: Style.font.caption * 0.85
                                                     color: root.faint
                                                     verticalAlignment: Text.AlignVCenter
                                                 }
@@ -1184,7 +1185,7 @@ Panel {
                                                                 visible: modelData[0] && modelData[0].monthLabel && modelData[0].monthLabel.length > 0
                                                                 text: modelData[0] ? (modelData[0].monthLabel || "") : ""
                                                                 font.family: Style.font.family
-                                                                font.pixelSize: Style.font.caption * 0.75
+                                                                font.pixelSize: Style.font.caption * 0.85
                                                                 color: root.faint
                                                             }
                                                         }
@@ -1257,7 +1258,7 @@ Panel {
                                                 ? ((root.hoveredCell.isToday ? (root.hoveredCell.dateStr + " (Today)") : root.hoveredCell.dateStr) + ": " + (root.hoveredCell.totalSeconds > 0 ? root.hoveredCell.focusTimeStr : "No study time"))
                                                 : ""
                                             font.family: Style.font.family
-                                            font.pixelSize: Style.font.caption * 0.85
+                                            font.pixelSize: Style.font.bodySmall
                                             font.bold: true
                                             color: root.fg
                                         }
@@ -1273,7 +1274,7 @@ Panel {
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 text: "less"
                                                 font.family: Style.font.family
-                                                font.pixelSize: Style.font.caption * 0.8
+                                                font.pixelSize: Style.font.caption
                                                 color: root.faint
                                             }
                                             Repeater {
@@ -1292,7 +1293,7 @@ Panel {
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 text: "more"
                                                 font.family: Style.font.family
-                                                font.pixelSize: Style.font.caption * 0.8
+                                                font.pixelSize: Style.font.caption
                                                 color: root.faint
                                             }
                                         }
@@ -1353,8 +1354,8 @@ Panel {
                                 text: "HOURS BY SUBJECT"
                             }
                             Segmented {
-                                Layout.preferredWidth: Style.space(180)
-                                Layout.preferredHeight: Style.space(26)
+                                Layout.preferredWidth: Style.space(190)
+                                Layout.preferredHeight: Style.space(28)
                                 fg: root.fg
                                 value: root.tagStatsScope
                                 options: [
@@ -1383,7 +1384,7 @@ Panel {
                                     readonly property color tagCol: root.colorForTag(modelData.tag)
                                     readonly property bool isActive: modelData.tag === root.activeTag
                                     width: tagList.width
-                                    height: Style.space(50)
+                                    height: Style.space(54)
                                     radius: Style.space(8)
                                     color: tagRowMouse.containsMouse ? root.surfaceHover : root.surface
                                     border.width: isActive ? 1 : 0
@@ -1409,23 +1410,23 @@ Panel {
                                                 elide: Text.ElideRight
                                                 text: modelData.tag
                                                 font.family: Style.font.family
-                                                font.pixelSize: Style.font.bodySmall
+                                                font.pixelSize: Style.font.body
                                                 font.bold: true
                                                 color: root.fg
                                             }
                                             Text {
                                                 text: modelData.formatted
                                                 font.family: Style.font.family
-                                                font.pixelSize: Style.font.bodySmall
+                                                font.pixelSize: Style.font.body
                                                 font.bold: true
                                                 color: root.fg
                                             }
                                             Text {
-                                                Layout.preferredWidth: Style.space(34)
+                                                Layout.preferredWidth: Style.space(38)
                                                 horizontalAlignment: Text.AlignRight
                                                 text: modelData.percent + "%"
                                                 font.family: Style.font.family
-                                                font.pixelSize: Style.font.caption
+                                                font.pixelSize: Style.font.bodySmall
                                                 color: root.dim
                                             }
                                         }
@@ -1526,7 +1527,7 @@ Panel {
                             Text {
                                 text: root.appUsageData.apps ? (root.appUsageData.apps.length + (root.appUsageData.apps.length === 1 ? " App" : " Apps")) : "0 Apps"
                                 font.family: Style.font.family
-                                font.pixelSize: Style.font.caption
+                                font.pixelSize: Style.font.bodySmall
                                 font.bold: true
                                 color: Color.accent
                             }
@@ -1534,7 +1535,7 @@ Panel {
 
                         Segmented {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: Style.space(26)
+                            Layout.preferredHeight: Style.space(28)
                             fg: root.fg
                             value: root.appScope
                             options: [
@@ -1550,7 +1551,7 @@ Panel {
                         ListView {
                             id: filterList
                             Layout.fillWidth: true
-                            Layout.preferredHeight: Style.space(24)
+                            Layout.preferredHeight: Style.space(26)
                             orientation: ListView.Horizontal
                             spacing: Style.space(6)
                             clip: true
@@ -1575,7 +1576,7 @@ Panel {
                                     anchors.centerIn: parent
                                     text: modelData === "" ? "All Subjects" : modelData
                                     font.family: Style.font.family
-                                    font.pixelSize: Style.font.caption
+                                    font.pixelSize: Style.font.bodySmall
                                     font.bold: parent.sel
                                     color: parent.sel ? root.fg : root.dim
                                 }
@@ -1613,8 +1614,8 @@ Panel {
 
                                         // Initial as app icon
                                         Rectangle {
-                                            Layout.preferredWidth: Style.space(22)
-                                            Layout.preferredHeight: Style.space(22)
+                                            Layout.preferredWidth: Style.space(24)
+                                            Layout.preferredHeight: Style.space(24)
                                             radius: Style.space(6)
                                             color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.15)
 
@@ -1622,7 +1623,7 @@ Panel {
                                                 anchors.centerIn: parent
                                                 text: modelData.app.length > 0 ? modelData.app.charAt(0).toUpperCase() : "?"
                                                 font.family: Style.font.family
-                                                font.pixelSize: Style.font.caption
+                                                font.pixelSize: Style.font.bodySmall
                                                 font.bold: true
                                                 color: Color.accent
                                             }
@@ -1632,29 +1633,29 @@ Panel {
                                             elide: Text.ElideRight
                                             text: modelData.app
                                             font.family: Style.font.family
-                                            font.pixelSize: Style.font.bodySmall
+                                            font.pixelSize: Style.font.body
                                             font.bold: true
                                             color: root.fg
                                         }
                                         Text {
                                             text: modelData.formatted
                                             font.family: Style.font.family
-                                            font.pixelSize: Style.font.caption
+                                            font.pixelSize: Style.font.bodySmall
                                             color: root.fg
                                         }
                                         Text {
-                                            Layout.preferredWidth: Style.space(34)
+                                            Layout.preferredWidth: Style.space(38)
                                             horizontalAlignment: Text.AlignRight
                                             text: modelData.percent + "%"
                                             font.family: Style.font.family
-                                            font.pixelSize: Style.font.caption
+                                            font.pixelSize: Style.font.bodySmall
                                             color: root.dim
                                         }
                                     }
 
                                     Rectangle {
-                                        x: Style.space(30)
-                                        width: parent.width - Style.space(30)
+                                        x: Style.space(32)
+                                        width: parent.width - Style.space(32)
                                         height: Style.space(4)
                                         radius: height / 2
                                         color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.08)
@@ -1708,7 +1709,7 @@ Panel {
                 z: 51
                 x: root.tagMenuX
                 y: root.tagMenuY
-                width: Style.space(280)
+                width: Style.space(290)
                 height: Math.max(tagMenuCol.implicitHeight + Style.space(16), root.activeColorTarget.length > 0 ? (root.paletteTargetY + (typeof colorPaletteCard !== "undefined" && colorPaletteCard && colorPaletteCard.implicitHeight > 0 ? colorPaletteCard.implicitHeight : Style.space(200)) + Style.space(12)) : 0)
                 Behavior on height { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
                 radius: Style.space(10)
@@ -1739,9 +1740,9 @@ Panel {
                         // Color picker button for new subject
                         Rectangle {
                             id: newTagColorBtn
-                            Layout.preferredWidth: Style.space(28)
-                            Layout.preferredHeight: Style.space(28)
-                            radius: Style.space(14)
+                            Layout.preferredWidth: Style.space(30)
+                            Layout.preferredHeight: Style.space(30)
+                            radius: Style.space(15)
                             readonly property color previewCol: root.newTagColor.length > 0
                                 ? root.newTagColor
                                 : (tagInput.text.trim().length > 0 ? Model.tagColor(tagInput.text.trim(), root.w ? root.w.tagColors : null) : Color.accent)
@@ -1775,11 +1776,11 @@ Panel {
                         TextField {
                             id: tagInput
                             Layout.fillWidth: true
-                            Layout.preferredHeight: Style.space(28)
+                            Layout.preferredHeight: Style.space(30)
                             foreground: root.fg
                             placeholderText: "New Subject…"
                             font.family: Style.font.family
-                            font.pixelSize: Style.font.bodySmall
+                            font.pixelSize: Style.font.body
                             maximumLength: 24
                             Keys.onReturnPressed: function(event) {
                                 event.accepted = true
@@ -1797,8 +1798,8 @@ Panel {
                         }
 
                         Rectangle {
-                            Layout.preferredWidth: Style.space(28)
-                            Layout.preferredHeight: Style.space(28)
+                            Layout.preferredWidth: Style.space(30)
+                            Layout.preferredHeight: Style.space(30)
                             radius: Style.space(6)
                             readonly property bool can: tagInput.text.trim().length > 0
                             color: can ? Color.accent : root.surface
@@ -1832,7 +1833,7 @@ Panel {
                             if (q.length === 0) return all
                             return all.filter(function(t) { return t.toLowerCase().indexOf(q) !== -1 })
                         }
-                        readonly property real rowH: Style.space(28)
+                        readonly property real rowH: Style.space(32)
                         width: parent.width
                         height: Math.max(rowH, Math.min(filtered.length, 6) * (rowH + spacing))
                         implicitHeight: height
@@ -1909,7 +1910,7 @@ Panel {
                                     elide: Text.ElideRight
                                     text: modelData
                                     font.family: Style.font.family
-                                    font.pixelSize: Style.font.bodySmall
+                                    font.pixelSize: Style.font.body
                                     font.bold: sel
                                     color: root.fg
                                 }
@@ -1920,7 +1921,7 @@ Panel {
                                     visible: isColorTarget || tagRowItem.isHovered
                                     text: "󰏘"
                                     font.family: Style.font.family
-                                    font.pixelSize: Style.font.caption
+                                    font.pixelSize: Style.font.bodySmall
                                     color: isColorTarget ? Color.accent : (palIconMouse.containsMouse ? Color.accent : root.dim)
 
                                     MouseArea {
@@ -1945,7 +1946,7 @@ Panel {
                                     visible: sel && !tagRowItem.isHovered && !isColorTarget
                                     text: "󰄬"
                                     font.family: Style.font.family
-                                    font.pixelSize: Style.font.caption
+                                    font.pixelSize: Style.font.bodySmall
                                     color: tagCol
                                 }
 
@@ -1954,7 +1955,7 @@ Panel {
                                     visible: tagRowItem.isHovered
                                     text: "󰆴"
                                     font.family: Style.font.family
-                                    font.pixelSize: Style.font.caption
+                                    font.pixelSize: Style.font.bodySmall
                                     color: trashMouse.containsMouse ? Color.urgent : root.dim
 
                                     MouseArea {
@@ -1986,7 +1987,7 @@ Panel {
                             horizontalAlignment: Text.AlignHCenter
                             elide: Text.ElideRight
                             font.family: Style.font.family
-                            font.pixelSize: Style.font.caption
+                            font.pixelSize: Style.font.bodySmall
                             color: root.dim
                         }
                     }
@@ -2106,7 +2107,7 @@ Panel {
                                     : "Color for “" + root.activeColorTarget + "”:"
                                 elide: Text.ElideRight
                                 font.family: Style.font.family
-                                font.pixelSize: Style.font.caption * 0.85
+                                font.pixelSize: Style.font.bodySmall
                                 font.bold: true
                                 color: root.fg
                             }
@@ -2114,7 +2115,7 @@ Panel {
                             Text {
                                 text: "✕"
                                 font.family: Style.font.family
-                                font.pixelSize: Style.font.caption
+                                font.pixelSize: Style.font.bodySmall
                                 color: closePalMouse.containsMouse ? root.fg : root.dim
 
                                 MouseArea {
@@ -2162,7 +2163,7 @@ Panel {
                                         visible: parent.isCurrent
                                         text: "✓"
                                         font.family: Style.font.family
-                                        font.pixelSize: Style.font.caption * 0.75
+                                        font.pixelSize: Style.font.caption * 0.85
                                         font.bold: true
                                         color: "#ffffff"
                                     }
@@ -2191,10 +2192,10 @@ Panel {
                             spacing: Style.space(6)
 
                             Text {
-                                Layout.preferredWidth: Style.space(24)
+                                Layout.preferredWidth: Style.space(28)
                                 text: "Hue"
                                 font.family: Style.font.family
-                                font.pixelSize: Style.font.caption * 0.75
+                                font.pixelSize: Style.font.caption * 0.88
                                 font.bold: true
                                 color: root.dim
                             }
@@ -2258,11 +2259,11 @@ Panel {
                             }
 
                             Text {
-                                Layout.preferredWidth: Style.space(32)
+                                Layout.preferredWidth: Style.space(36)
                                 horizontalAlignment: Text.AlignRight
                                 text: Math.round(colorPaletteCard.hueVal * 360) + "°"
                                 font.family: Style.font.family
-                                font.pixelSize: Style.font.caption * 0.75
+                                font.pixelSize: Style.font.caption * 0.88
                                 color: root.fg
                             }
                         }
@@ -2273,10 +2274,10 @@ Panel {
                             spacing: Style.space(6)
 
                             Text {
-                                Layout.preferredWidth: Style.space(24)
+                                Layout.preferredWidth: Style.space(28)
                                 text: "Sat"
                                 font.family: Style.font.family
-                                font.pixelSize: Style.font.caption * 0.75
+                                font.pixelSize: Style.font.caption * 0.88
                                 font.bold: true
                                 color: root.dim
                             }
@@ -2335,11 +2336,11 @@ Panel {
                             }
 
                             Text {
-                                Layout.preferredWidth: Style.space(32)
+                                Layout.preferredWidth: Style.space(36)
                                 horizontalAlignment: Text.AlignRight
                                 text: Math.round(colorPaletteCard.satVal * 100) + "%"
                                 font.family: Style.font.family
-                                font.pixelSize: Style.font.caption * 0.75
+                                font.pixelSize: Style.font.caption * 0.88
                                 color: root.fg
                             }
                         }
@@ -2350,10 +2351,10 @@ Panel {
                             spacing: Style.space(6)
 
                             Text {
-                                Layout.preferredWidth: Style.space(24)
+                                Layout.preferredWidth: Style.space(28)
                                 text: "Bri"
                                 font.family: Style.font.family
-                                font.pixelSize: Style.font.caption * 0.75
+                                font.pixelSize: Style.font.caption * 0.88
                                 font.bold: true
                                 color: root.dim
                             }
@@ -2412,11 +2413,11 @@ Panel {
                             }
 
                             Text {
-                                Layout.preferredWidth: Style.space(32)
+                                Layout.preferredWidth: Style.space(36)
                                 horizontalAlignment: Text.AlignRight
                                 text: Math.round(colorPaletteCard.briVal * 100) + "%"
                                 font.family: Style.font.family
-                                font.pixelSize: Style.font.caption * 0.75
+                                font.pixelSize: Style.font.caption * 0.88
                                 color: root.fg
                             }
                         }
@@ -2435,11 +2436,11 @@ Panel {
                             TextField {
                                 id: customHexInput
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: Style.space(26)
+                                Layout.preferredHeight: Style.space(28)
                                 foreground: root.fg
                                 placeholderText: "#HEX (e.g. #3b82f6)"
                                 font.family: Style.font.family
-                                font.pixelSize: Style.font.caption * 0.85
+                                font.pixelSize: Style.font.bodySmall
                                 maximumLength: 7
                                 onTextChanged: {
                                     if (colorPaletteCard.isSyncing) return
@@ -2479,8 +2480,8 @@ Panel {
 
                             Rectangle {
                                 id: randomBtn
-                                Layout.preferredHeight: Style.space(26)
-                                Layout.preferredWidth: Style.space(32)
+                                Layout.preferredHeight: Style.space(28)
+                                Layout.preferredWidth: Style.space(34)
                                 radius: Style.space(5)
                                 color: randomMouse.containsMouse ? root.surfaceHover : root.surface
                                 border.width: 1
@@ -2490,7 +2491,7 @@ Panel {
                                     anchors.centerIn: parent
                                     text: "🎲"
                                     font.family: Style.font.family
-                                    font.pixelSize: Style.font.caption
+                                    font.pixelSize: Style.font.bodySmall
                                 }
 
                                 MouseArea {
