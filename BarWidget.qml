@@ -489,10 +489,20 @@ BarWidget {
         }
     }
 
+    readonly property real openPanelIndicatorWidth: {
+        if (!root.isRunning && typeof iconGlyph !== "undefined" && iconGlyph)
+            return Math.max(Style.space(12), Math.round(iconGlyph.tightWidth))
+        if (root.bar && root.bar.vertical)
+            return Style.bar.iconSlot
+        return button.labelWidth
+    }
+
     WidgetButton {
         id: button
         anchors.fill: parent
         bar: root.bar
+        labelVisible: root.isRunning
+        fixedWidth: (root.bar && root.bar.vertical) ? -1 : (root.isRunning ? -1 : Style.bar.iconSlot)
         text: {
             if (!root.isRunning) {
                 return "\uf19d"
@@ -503,6 +513,16 @@ BarWidget {
         onPressed: function(buttonCode) {
             if (buttonCode === Qt.LeftButton) root.toggle()
             else if (buttonCode === Qt.RightButton) root.toggleRunning()
+        }
+
+        OpticalGlyph {
+            id: iconGlyph
+            visible: !root.isRunning
+            anchors.fill: parent
+            text: "\uf19d"
+            fontFamily: button.fontFamily
+            fontSize: button.fontSize
+            color: button.active && button.useActiveColor ? button.activeColor : button.foreground
         }
     }
 }
