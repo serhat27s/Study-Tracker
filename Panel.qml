@@ -1722,7 +1722,7 @@ Panel {
                                 visible: root.newTagColor.length === 0 && tagInput.text.trim().length === 0
                                 text: "󰏘"
                                 font.family: Style.font.family
-                                font.pixelSize: Style.font.caption * 0.8
+                                font.pixelSize: Style.font.iconLarge
                                 color: "#ffffff"
                             }
 
