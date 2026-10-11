@@ -641,33 +641,6 @@ Panel {
                                                 }
                                             }
 
-                                            // Phase manuell wählen (Fokus / Kurze Pause / Lange Pause)
-                                            RowLayout {
-                                                width: parent.width
-                                                spacing: Style.space(6)
-
-                                                Text {
-                                                    text: "Phase:"
-                                                    font.family: Style.font.family
-                                                    font.pixelSize: Style.font.caption
-                                                    color: root.dim
-                                                }
-
-                                                Segmented {
-                                                    Layout.fillWidth: true
-                                                    Layout.preferredHeight: Style.space(24)
-                                                    fg: root.fg
-                                                    fontSize: Style.font.caption * 0.85
-                                                    value: root.w ? root.w.pomodoroPhase : "work"
-                                                    options: [
-                                                        { value: "work", label: "Fokus" },
-                                                        { value: "shortBreak", label: "Kurze Pause" },
-                                                        { value: "longBreak", label: "Lange Pause" }
-                                                    ]
-                                                    onPicked: function(v) { if (root.w) root.w.setPomodoroPhase(v) }
-                                                }
-                                            }
-
                                             // 3 Stepper-Zeilen: Fokus, Kurze Pause, Lange Pause
                                             Repeater {
                                                 model: [
