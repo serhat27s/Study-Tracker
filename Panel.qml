@@ -1128,7 +1128,7 @@ Panel {
                                                     text: modelData
                                                     font.family: Style.font.family
                                                     font.pixelSize: Style.font.caption * 0.85
-                                                    color: root.faint
+                                                    color: root.dim
                                                     verticalAlignment: Text.AlignVCenter
                                                 }
                                             }
@@ -1138,7 +1138,7 @@ Panel {
                                         Flickable {
                                             id: heatmapFlick
                                             width: parent.width - weekdayCol.width - Style.space(6)
-                                            height: heatmapWeeksCol.implicitHeight + Style.space(18)
+                                            height: heatmapWeeksCol.implicitHeight + Style.space(9)
                                             clip: true
                                             contentWidth: Math.max(heatmapWeeksCol.implicitWidth, (Style.space(11) + Style.space(3)) * (root.heatmapData.weeks ? root.heatmapData.weeks.length : 53))
                                             contentHeight: height
@@ -1148,17 +1148,17 @@ Panel {
                                             ScrollBar.horizontal: ScrollBar {
                                                 id: heatmapScrollBar
                                                 policy: ScrollBar.AsNeeded
-                                                implicitHeight: Style.space(6)
+                                                implicitHeight: Style.space(5)
                                                 contentItem: Rectangle {
-                                                    implicitHeight: Style.space(4)
+                                                    implicitHeight: Style.space(3.5)
                                                     radius: height / 2
                                                     color: heatmapScrollBar.pressed
                                                         ? Color.accent
-                                                        : (heatmapScrollBar.hovered ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.70) : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.22))
+                                                        : (heatmapScrollBar.hovered ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.70) : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.28))
                                                     Behavior on color { ColorAnimation { duration: 150 } }
                                                 }
                                                 background: Item {
-                                                    implicitHeight: Style.space(6)
+                                                    implicitHeight: Style.space(5)
                                                 }
                                             }
 
@@ -1199,7 +1199,7 @@ Panel {
                                                                 text: modelData[0] ? (modelData[0].monthLabel || "") : ""
                                                                 font.family: Style.font.family
                                                                 font.pixelSize: Style.font.caption * 0.85
-                                                                color: root.faint
+                                                                color: root.dim
                                                             }
                                                         }
                                                     }
@@ -1288,7 +1288,7 @@ Panel {
                                                 text: "less"
                                                 font.family: Style.font.family
                                                 font.pixelSize: Style.font.caption
-                                                color: root.faint
+                                                color: root.dim
                                             }
                                             Repeater {
                                                 model: [0.07, 0.25, 0.5, 0.75, 1.0]
@@ -1307,7 +1307,7 @@ Panel {
                                                 text: "more"
                                                 font.family: Style.font.family
                                                 font.pixelSize: Style.font.caption
-                                                color: root.faint
+                                                color: root.dim
                                             }
                                         }
                                     }
