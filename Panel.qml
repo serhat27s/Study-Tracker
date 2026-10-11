@@ -1138,7 +1138,7 @@ Panel {
                                         Flickable {
                                             id: heatmapFlick
                                             width: parent.width - weekdayCol.width - Style.space(6)
-                                            height: heatmapWeeksCol.implicitHeight + Style.space(6)
+                                            height: heatmapWeeksCol.implicitHeight + Style.space(18)
                                             clip: true
                                             contentWidth: Math.max(heatmapWeeksCol.implicitWidth, (Style.space(11) + Style.space(3)) * (root.heatmapData.weeks ? root.heatmapData.weeks.length : 53))
                                             contentHeight: height
@@ -1146,7 +1146,20 @@ Panel {
                                             flickableDirection: Flickable.HorizontalFlick
 
                                             ScrollBar.horizontal: ScrollBar {
+                                                id: heatmapScrollBar
                                                 policy: ScrollBar.AsNeeded
+                                                implicitHeight: Style.space(6)
+                                                contentItem: Rectangle {
+                                                    implicitHeight: Style.space(4)
+                                                    radius: height / 2
+                                                    color: heatmapScrollBar.pressed
+                                                        ? Color.accent
+                                                        : (heatmapScrollBar.hovered ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.70) : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.22))
+                                                    Behavior on color { ColorAnimation { duration: 150 } }
+                                                }
+                                                background: Item {
+                                                    implicitHeight: Style.space(6)
+                                                }
                                             }
 
                                             WheelHandler {
