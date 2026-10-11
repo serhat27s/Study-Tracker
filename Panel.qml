@@ -21,6 +21,7 @@ Panel {
     property bool tagMenuOpen: false
     property real tagMenuX: 0
     property real tagMenuY: 0
+    property bool pomodoroSettingsOpen: false
 
     property string tagStatsScope: "week"   // "today" | "week" | "all"
     property string appScope: "today"       // "current" | "today" | "week" | "all"
@@ -28,8 +29,8 @@ Panel {
     property var hoveredCell: null
 
     // Feste Panelgröße – ändert sich nie, egal welcher Tab / Zustand
-    readonly property int panelWidth: Style.space(400)
-    readonly property int panelInnerHeight: Style.space(548)
+    readonly property int panelWidth: Style.space(420)
+    readonly property int panelInnerHeight: Style.space(560)
 
     readonly property color fg: root.barForeground
     readonly property color dim: Qt.darker(fg, 1.5)
@@ -55,7 +56,7 @@ Panel {
         return (w.elapsedSeconds % 3600) / 3600
     }
 
-    readonly property int heatmapWeeks: 17
+    readonly property int heatmapWeeks: 52
 
     readonly property var heatmapData: w
         ? Model.buildHeatmap(w.history, root.heatmapWeeks)
@@ -79,6 +80,24 @@ Panel {
         return Model.tagColor(name, idx)
     }
 
+    function getPomodoroDuration(phase) {
+        if (!w) return 1500
+        if (phase === "work") return w.pomodoroWorkDuration
+        if (phase === "shortBreak") return w.pomodoroShortBreakDuration
+        if (phase === "longBreak") return w.pomodoroLongBreakDuration
+        return 1500
+    }
+
+    onOpenedChanged: {
+        if (root.opened && root.currentTab === 0) {
+            Qt.callLater(function() {
+                if (typeof heatmapFlick !== "undefined" && heatmapFlick) {
+                    heatmapFlick.contentX = Math.max(0, heatmapFlick.contentWidth - heatmapFlick.width)
+                }
+            })
+        }
+    }
+
     function open() {
         if (w) w.refreshUptime()
         root.controller.show()
@@ -98,6 +117,13 @@ Panel {
         root.closeTagMenu()
         if (i === 2 && w) w.refreshUptime()
         root.currentTab = i
+        if (i === 0) {
+            Qt.callLater(function() {
+                if (typeof heatmapFlick !== "undefined" && heatmapFlick) {
+                    heatmapFlick.contentX = Math.max(0, heatmapFlick.contentWidth - heatmapFlick.width)
+                }
+            })
+        }
     }
 
     function openTagMenu() {
@@ -485,35 +511,282 @@ Panel {
                                         }
                                     }
 
-                                    // Phasen-Auswahl (Pomodoro) bzw. Info-Zeile (Stoppuhr) – gleiche Höhe
-                                    Item {
+                                    // Phasen-Auswahl (Pomodoro) mit Einstellungs-Button bzw. Info-Zeile (Stoppuhr)
+                                    RowLayout {
                                         width: parent.width
-                                        height: Style.space(26)
+                                        visible: root.isPomodoro
+                                        spacing: Style.space(6)
 
                                         Segmented {
-                                            anchors.fill: parent
-                                            visible: root.isPomodoro
+                                            Layout.fillWidth: true
+                                            Layout.preferredHeight: Style.space(26)
                                             fg: root.fg
                                             value: root.w ? root.w.pomodoroPhase : "work"
                                             options: [
-                                                { value: "work", label: "Fokus 25" },
-                                                { value: "shortBreak", label: "Pause 5" },
-                                                { value: "longBreak", label: "Lang 15" }
+                                                { value: "work", label: "Fokus " + (root.w ? Math.round(root.w.pomodoroWorkDuration / 60) : 25) + "m" },
+                                                { value: "shortBreak", label: "Pause " + (root.w ? Math.round(root.w.pomodoroShortBreakDuration / 60) : 5) + "m" },
+                                                { value: "longBreak", label: "Lang " + (root.w ? Math.round(root.w.pomodoroLongBreakDuration / 60) : 15) + "m" }
                                             ]
                                             onPicked: function(v) { if (root.w) root.w.setPomodoroPhase(v) }
                                         }
 
-                                        Text {
-                                            anchors.centerIn: parent
-                                            width: parent.width
-                                            visible: !root.isPomodoro
-                                            horizontalAlignment: Text.AlignHCenter
-                                            elide: Text.ElideRight
-                                            text: "Heute gelernt: " + root.heatmapData.todayHours
-                                            font.family: Style.font.family
-                                            font.pixelSize: Style.font.caption
-                                            color: root.dim
+                                        // Button zum Öffnen der Pomodoro-Zeiteinstellungen
+                                        Rectangle {
+                                            Layout.preferredWidth: Style.space(26)
+                                            Layout.preferredHeight: Style.space(26)
+                                            radius: Style.space(6)
+                                            color: root.pomodoroSettingsOpen
+                                                ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.25)
+                                                : (pomoGearMouse.containsMouse ? root.surfaceHover : root.surface)
+                                            border.width: 1
+                                            border.color: root.pomodoroSettingsOpen ? Color.accent : root.hairline
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: "󰒓"
+                                                font.family: Style.font.family
+                                                font.pixelSize: Style.font.caption
+                                                color: root.pomodoroSettingsOpen ? Color.accent : root.fg
+                                            }
+
+                                            MouseArea {
+                                                id: pomoGearMouse
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: root.pomodoroSettingsOpen = !root.pomodoroSettingsOpen
+                                            }
+
+                                            PanelToolTip {
+                                                visible: pomoGearMouse.containsMouse
+                                                text: "Pomodoro-Dauer anpassen (Fokus & Pausen)"
+                                            }
                                         }
+                                    }
+
+                                    // Ausklappbare Zeiteinstellungen für Pomodoro
+                                    Rectangle {
+                                        width: parent.width
+                                        visible: root.isPomodoro && root.pomodoroSettingsOpen
+                                        implicitHeight: pomoSettingsCol.implicitHeight + Style.space(16)
+                                        radius: Style.space(10)
+                                        color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.04)
+                                        border.width: 1
+                                        border.color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.35)
+
+                                        Column {
+                                            id: pomoSettingsCol
+                                            anchors.left: parent.left
+                                            anchors.right: parent.right
+                                            anchors.top: parent.top
+                                            anchors.margins: Style.space(10)
+                                            spacing: Style.space(8)
+
+                                            RowLayout {
+                                                width: parent.width
+
+                                                Text {
+                                                    text: "POMODORO ZEITEN ANPASSEN"
+                                                    font.family: Style.font.family
+                                                    font.pixelSize: Style.font.caption * 0.85
+                                                    font.bold: true
+                                                    color: Color.accent
+                                                }
+
+                                                Item { Layout.fillWidth: true }
+
+                                                Text {
+                                                    text: "✕"
+                                                    font.family: Style.font.family
+                                                    font.pixelSize: Style.font.caption
+                                                    color: closePomoMouse.containsMouse ? root.fg : root.dim
+
+                                                    MouseArea {
+                                                        id: closePomoMouse
+                                                        anchors.fill: parent
+                                                        anchors.margins: -Style.space(4)
+                                                        hoverEnabled: true
+                                                        cursorShape: Qt.PointingHandCursor
+                                                        onClicked: root.pomodoroSettingsOpen = false
+                                                    }
+                                                }
+                                            }
+
+                                            // Schnell-Presets
+                                            Row {
+                                                width: parent.width
+                                                spacing: Style.space(4)
+
+                                                Repeater {
+                                                    model: [
+                                                        { label: "25 / 5", work: 25, short: 5, long: 15, tip: "Klassisch (25m Fokus, 5m Pause)" },
+                                                        { label: "50 / 10", work: 50, short: 10, long: 20, tip: "Deep Work (50m Fokus, 10m Pause)" },
+                                                        { label: "45 / 15", work: 45, short: 15, long: 30, tip: "Vorlesung / Sprint (45m Fokus, 15m Pause)" },
+                                                        { label: "20 / 5", work: 20, short: 5, long: 10, tip: "Kurz (20m Fokus, 5m Pause)" }
+                                                    ]
+
+                                                    Rectangle {
+                                                        width: (parent.width - Style.space(12)) / 4
+                                                        height: Style.space(24)
+                                                        radius: Style.space(6)
+                                                        readonly property bool isCurrent: root.w
+                                                            && Math.round(root.w.pomodoroWorkDuration / 60) === modelData.work
+                                                            && Math.round(root.w.pomodoroShortBreakDuration / 60) === modelData.short
+                                                        color: isCurrent
+                                                            ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.25)
+                                                            : (preMouse.containsMouse ? root.surfaceHover : root.surface)
+                                                        border.width: 1
+                                                        border.color: isCurrent ? Color.accent : root.hairline
+
+                                                        Text {
+                                                            anchors.centerIn: parent
+                                                            text: modelData.label
+                                                            font.family: Style.font.family
+                                                            font.pixelSize: Style.font.caption * 0.85
+                                                            font.bold: parent.isCurrent
+                                                            color: parent.isCurrent ? Color.accent : root.fg
+                                                        }
+
+                                                        MouseArea {
+                                                            id: preMouse
+                                                            anchors.fill: parent
+                                                            hoverEnabled: true
+                                                            cursorShape: Qt.PointingHandCursor
+                                                            onClicked: if (root.w) root.w.setPomodoroPreset(modelData.work, modelData.short, modelData.long)
+                                                        }
+
+                                                        PanelToolTip {
+                                                            visible: preMouse.containsMouse
+                                                            text: modelData.tip
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            // 3 Stepper-Zeilen: Fokus, Kurze Pause, Lange Pause
+                                            Repeater {
+                                                model: [
+                                                    { phase: "work", icon: "🎯", label: "Fokus-Zeit", step: 5, min: 5, max: 120 },
+                                                    { phase: "shortBreak", icon: "☕", label: "Kurze Pause", step: 1, min: 1, max: 30 },
+                                                    { phase: "longBreak", icon: "🛋️", label: "Lange Pause", step: 5, min: 5, max: 60 }
+                                                ]
+
+                                                RowLayout {
+                                                    id: stepperRow
+                                                    width: parent.width
+                                                    spacing: Style.space(6)
+                                                    readonly property int currentSec: root.getPomodoroDuration(modelData.phase)
+
+                                                    Text {
+                                                        text: modelData.icon + " " + modelData.label
+                                                        font.family: Style.font.family
+                                                        font.pixelSize: Style.font.caption
+                                                        color: root.fg
+                                                        Layout.fillWidth: true
+                                                    }
+
+                                                    // Stepper: [-]  X Min.  [+]
+                                                    Row {
+                                                        spacing: Style.space(4)
+
+                                                        // Minus Button
+                                                        Rectangle {
+                                                            width: Style.space(24)
+                                                            height: Style.space(24)
+                                                            radius: Style.space(5)
+                                                            color: minusMouse.containsMouse ? root.surfaceHover : root.surface
+                                                            border.width: 1
+                                                            border.color: root.hairline
+
+                                                            Text {
+                                                                anchors.centerIn: parent
+                                                                text: "−"
+                                                                font.family: Style.font.family
+                                                                font.pixelSize: Style.font.bodySmall
+                                                                font.bold: true
+                                                                color: root.fg
+                                                            }
+
+                                                            MouseArea {
+                                                                id: minusMouse
+                                                                anchors.fill: parent
+                                                                hoverEnabled: true
+                                                                cursorShape: Qt.PointingHandCursor
+                                                                onClicked: {
+                                                                    if (!root.w) return
+                                                                    var curMins = Math.round(stepperRow.currentSec / 60)
+                                                                    var nextMins = Math.max(modelData.min, curMins - modelData.step)
+                                                                    root.w.setPomodoroDuration(modelData.phase, nextMins * 60)
+                                                                }
+                                                            }
+                                                        }
+
+                                                        // Anzeige Minuten
+                                                        Rectangle {
+                                                            width: Style.space(54)
+                                                            height: Style.space(24)
+                                                            radius: Style.space(5)
+                                                            color: root.surface
+                                                            border.width: 1
+                                                            border.color: root.hairline
+
+                                                            Text {
+                                                                anchors.centerIn: parent
+                                                                text: Math.round(stepperRow.currentSec / 60) + " Min."
+                                                                font.family: Style.font.family
+                                                                font.pixelSize: Style.font.caption
+                                                                font.bold: true
+                                                                color: Color.accent
+                                                            }
+                                                        }
+
+                                                        // Plus Button
+                                                        Rectangle {
+                                                            width: Style.space(24)
+                                                            height: Style.space(24)
+                                                            radius: Style.space(5)
+                                                            color: plusMouse.containsMouse ? root.surfaceHover : root.surface
+                                                            border.width: 1
+                                                            border.color: root.hairline
+
+                                                            Text {
+                                                                anchors.centerIn: parent
+                                                                text: "+"
+                                                                font.family: Style.font.family
+                                                                font.pixelSize: Style.font.bodySmall
+                                                                font.bold: true
+                                                                color: root.fg
+                                                            }
+
+                                                            MouseArea {
+                                                                id: plusMouse
+                                                                anchors.fill: parent
+                                                                hoverEnabled: true
+                                                                cursorShape: Qt.PointingHandCursor
+                                                                onClicked: {
+                                                                    if (!root.w) return
+                                                                    var curMins = Math.round(stepperRow.currentSec / 60)
+                                                                    var nextMins = Math.min(modelData.max, curMins + modelData.step)
+                                                                    root.w.setPomodoroDuration(modelData.phase, nextMins * 60)
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Stoppuhr Info-Zeile
+                                    Text {
+                                        width: parent.width
+                                        visible: !root.isPomodoro
+                                        horizontalAlignment: Text.AlignHCenter
+                                        elide: Text.ElideRight
+                                        text: "Heute gelernt: " + root.heatmapData.todayHours
+                                        font.family: Style.font.family
+                                        font.pixelSize: Style.font.caption
+                                        color: root.dim
                                     }
 
                                     // Steuerung
@@ -598,16 +871,11 @@ Panel {
                                 }
                             }
 
-                            // ---------------- Aktivitätsgraph ----------------
+                            // ---------------- Aktivitätsgraph (52 Wochen — Ganzes Jahr) ----------------
                             Column {
                                 id: heatmapSection
                                 width: parent.width
                                 spacing: Style.space(6)
-
-                                readonly property real labelW: Style.space(18)
-                                readonly property real gap: Style.space(3)
-                                readonly property real cell: Math.max(6, Math.floor(
-                                    (width - labelW - gap - (root.heatmapWeeks - 1) * gap) / root.heatmapWeeks))
 
                                 RowLayout {
                                     width: parent.width
@@ -615,8 +883,72 @@ Panel {
                                     SectionLabel {
                                         Layout.fillWidth: true
                                         fg: root.fg
-                                        text: "AKTIVITÄT"
+                                        text: "AKTIVITÄT (52 WOCHEN — GANZES JAHR)"
                                     }
+
+                                    // Schnelle Scroll-Buttons links/rechts
+                                    Row {
+                                        spacing: Style.space(2)
+
+                                        Rectangle {
+                                            width: Style.space(20)
+                                            height: Style.space(20)
+                                            radius: Style.space(4)
+                                            color: scrollLeftMouse.containsMouse ? root.surfaceHover : "transparent"
+                                            border.width: 1
+                                            border.color: root.hairline
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: "󰅁"
+                                                font.family: Style.font.family
+                                                font.pixelSize: Style.font.caption
+                                                color: root.dim
+                                            }
+
+                                            MouseArea {
+                                                id: scrollLeftMouse
+                                                anchors.fill: parent
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: heatmapFlick.contentX = Math.max(0, heatmapFlick.contentX - Style.space(160))
+                                            }
+
+                                            PanelToolTip {
+                                                visible: scrollLeftMouse.containsMouse
+                                                text: "Frühere Monate anzeigen"
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            width: Style.space(20)
+                                            height: Style.space(20)
+                                            radius: Style.space(4)
+                                            color: scrollRightMouse.containsMouse ? root.surfaceHover : "transparent"
+                                            border.width: 1
+                                            border.color: root.hairline
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: "󰅂"
+                                                font.family: Style.font.family
+                                                font.pixelSize: Style.font.caption
+                                                color: root.dim
+                                            }
+
+                                            MouseArea {
+                                                id: scrollRightMouse
+                                                anchors.fill: parent
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: heatmapFlick.contentX = Math.min(heatmapFlick.contentWidth - heatmapFlick.width, heatmapFlick.contentX + Style.space(160))
+                                            }
+
+                                            PanelToolTip {
+                                                visible: scrollRightMouse.containsMouse
+                                                text: "Zu heute scrollen"
+                                            }
+                                        }
+                                    }
+
                                     Text {
                                         text: "󰈸 " + root.heatmapData.streakDays + " Tage Streak"
                                         font.family: Style.font.family
@@ -626,82 +958,116 @@ Panel {
                                     }
                                 }
 
-                                // Monatsbeschriftung
+                                // 52-Wochen Grid mit fester Wochentagsspalte links
                                 Row {
-                                    x: heatmapSection.labelW + heatmapSection.gap
-                                    spacing: heatmapSection.gap
+                                    width: parent.width
+                                    spacing: Style.space(4)
 
-                                    Repeater {
-                                        model: root.heatmapData.weeks
-
-                                        Item {
-                                            width: heatmapSection.cell
-                                            height: Style.space(12)
-
-                                            Text {
-                                                readonly property int month: parseInt(modelData[0].dateKey.split("-")[1], 10) - 1
-                                                readonly property bool firstOfMonth: index === 0
-                                                    || parseInt(root.heatmapData.weeks[index - 1][0].dateKey.split("-")[1], 10) - 1 !== month
-                                                visible: firstOfMonth && index < root.heatmapWeeks - 1
-                                                text: ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"][month]
-                                                font.family: Style.font.family
-                                                font.pixelSize: Style.font.caption * 0.8
-                                                color: root.faint
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // Grid
-                                Row {
-                                    spacing: heatmapSection.gap
-
+                                    // Feste Spalte: Wochentage (Mo, Mi, Fr, So)
                                     Column {
-                                        spacing: heatmapSection.gap
+                                        y: Style.space(15) // Offset für Monatsleiste oben
+                                        spacing: Style.space(3)
+
                                         Repeater {
                                             model: ["Mo", "", "Mi", "", "Fr", "", "So"]
                                             Text {
-                                                width: heatmapSection.labelW
-                                                height: heatmapSection.cell
+                                                width: Style.space(18)
+                                                height: Style.space(11)
                                                 text: modelData
                                                 font.family: Style.font.family
-                                                font.pixelSize: Style.font.caption * 0.75
+                                                font.pixelSize: Style.font.caption * 0.72
                                                 color: root.faint
                                                 verticalAlignment: Text.AlignVCenter
                                             }
                                         }
                                     }
 
-                                    Repeater {
-                                        model: root.heatmapData.weeks
+                                    // Horizontale Flickable für alle 52 Wochen des Jahres
+                                    Flickable {
+                                        id: heatmapFlick
+                                        width: parent.width - Style.space(22)
+                                        height: heatmapContentCol.implicitHeight + Style.space(4)
+                                        contentWidth: heatmapWeeksRow.implicitWidth + Style.space(20)
+                                        contentHeight: height
+                                        clip: true
+                                        boundsBehavior: Flickable.StopAtBounds
+                                        flickableDirection: Flickable.HorizontalFlick
+
+                                        ScrollBar.horizontal: ScrollBar {
+                                            policy: ScrollBar.AsNeeded
+                                        }
+
+                                        Component.onCompleted: {
+                                            Qt.callLater(function() {
+                                                heatmapFlick.contentX = Math.max(0, heatmapFlick.contentWidth - heatmapFlick.width)
+                                            })
+                                        }
 
                                         Column {
-                                            spacing: heatmapSection.gap
+                                            id: heatmapContentCol
+                                            spacing: Style.space(3)
 
-                                            Repeater {
-                                                model: modelData
+                                            // Monatsbeschriftung oben
+                                            Row {
+                                                id: monthHeaderRow
+                                                spacing: Style.space(3)
 
-                                                Rectangle {
-                                                    width: heatmapSection.cell
-                                                    height: heatmapSection.cell
-                                                    radius: Style.space(3)
-                                                    color: {
-                                                        if (modelData.isFuture) return "transparent"
-                                                        if (modelData.level === 4) return Color.accent
-                                                        if (modelData.level === 3) return Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.75)
-                                                        if (modelData.level === 2) return Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.50)
-                                                        if (modelData.level === 1) return Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.25)
-                                                        return Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.07)
+                                                Repeater {
+                                                    model: root.heatmapData.weeks
+
+                                                    Item {
+                                                        width: Style.space(11)
+                                                        height: Style.space(12)
+
+                                                        Text {
+                                                            visible: modelData[0] && modelData[0].monthLabel && modelData[0].monthLabel.length > 0
+                                                            text: modelData[0] ? (modelData[0].monthLabel || "") : ""
+                                                            font.family: Style.font.family
+                                                            font.pixelSize: Style.font.caption * 0.75
+                                                            color: root.faint
+                                                        }
                                                     }
-                                                    border.width: (modelData.isToday || cellMouse.containsMouse) ? 1 : 0
-                                                    border.color: cellMouse.containsMouse ? root.fg : Color.accent
+                                                }
+                                            }
 
-                                                    MouseArea {
-                                                        id: cellMouse
-                                                        anchors.fill: parent
-                                                        hoverEnabled: !modelData.isFuture
-                                                        onEntered: root.hoveredCell = modelData
-                                                        onExited: if (root.hoveredCell === modelData) root.hoveredCell = null
+                                            // 52 Wochenspalten
+                                            Row {
+                                                id: heatmapWeeksRow
+                                                spacing: Style.space(3)
+
+                                                Repeater {
+                                                    model: root.heatmapData.weeks
+
+                                                    Column {
+                                                        spacing: Style.space(3)
+
+                                                        Repeater {
+                                                            model: modelData
+
+                                                            Rectangle {
+                                                                width: Style.space(11)
+                                                                height: Style.space(11)
+                                                                radius: Style.space(2)
+                                                                color: {
+                                                                    if (modelData.isFuture) return "transparent"
+                                                                    if (modelData.level === 4) return Color.accent
+                                                                    if (modelData.level === 3) return Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.75)
+                                                                    if (modelData.level === 2) return Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.50)
+                                                                    if (modelData.level === 1) return Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.25)
+                                                                    return Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.07)
+                                                                }
+                                                                border.width: (modelData.isToday || cellMouse.containsMouse) ? 1 : 0
+                                                                border.color: cellMouse.containsMouse ? root.fg : Color.accent
+
+                                                                MouseArea {
+                                                                    id: cellMouse
+                                                                    anchors.fill: parent
+                                                                    hoverEnabled: !modelData.isFuture
+                                                                    onEntered: root.hoveredCell = modelData
+                                                                    onExited: if (root.hoveredCell === modelData) root.hoveredCell = null
+                                                                }
+                                                            }
+                                                        }
                                                     }
                                                 }
                                             }

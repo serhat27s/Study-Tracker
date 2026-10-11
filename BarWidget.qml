@@ -16,6 +16,7 @@ BarWidget {
     property int pomodoroWorkDuration: 1500       // 25m
     property int pomodoroShortBreakDuration: 300  // 5m
     property int pomodoroLongBreakDuration: 900   // 15m
+    property int pomodoroCyclesTarget: 4          // 4 Zyklen
     property int pomodoroCyclesCompleted: 0
 
     property string activeTag: "Mathe"
@@ -79,13 +80,34 @@ BarWidget {
                 if (content && content.length > 0) {
                     var parsed = JSON.parse(content)
                     if (parsed && Array.isArray(parsed.history) && parsed.history.length > 0) {
-                        root.history = parsed.history
+                        var hasReal = parsed.history.some(function(s) {
+                            return s.id && String(s.id).indexOf("sess_") === 0
+                        })
+                        if (!hasReal && parsed.history.length <= 15) {
+                            root.history = Model.defaultSampleHistory()
+                            root.saveToDisk()
+                        } else {
+                            root.history = parsed.history
+                        }
                     } else {
                         root.history = Model.defaultSampleHistory()
                         root.saveToDisk()
                     }
                     if (parsed && Array.isArray(parsed.recentTags) && parsed.recentTags.length > 0) {
                         root.recentTags = parsed.recentTags
+                    }
+                    if (parsed.pomodoroWorkDuration && Number(parsed.pomodoroWorkDuration) > 0)
+                        root.pomodoroWorkDuration = Number(parsed.pomodoroWorkDuration)
+                    if (parsed.pomodoroShortBreakDuration && Number(parsed.pomodoroShortBreakDuration) > 0)
+                        root.pomodoroShortBreakDuration = Number(parsed.pomodoroShortBreakDuration)
+                    if (parsed.pomodoroLongBreakDuration && Number(parsed.pomodoroLongBreakDuration) > 0)
+                        root.pomodoroLongBreakDuration = Number(parsed.pomodoroLongBreakDuration)
+                    if (parsed.pomodoroCyclesTarget && Number(parsed.pomodoroCyclesTarget) > 0)
+                        root.pomodoroCyclesTarget = Number(parsed.pomodoroCyclesTarget)
+                    if (!root.isRunning && root.activeMode === "pomodoro") {
+                        root.remainingSeconds = (root.pomodoroPhase === "work")
+                            ? root.pomodoroWorkDuration
+                            : (root.pomodoroPhase === "shortBreak" ? root.pomodoroShortBreakDuration : root.pomodoroLongBreakDuration)
                     }
                 } else {
                     root.history = Model.defaultSampleHistory()
@@ -108,6 +130,10 @@ BarWidget {
         var payload = {
             history: root.history,
             recentTags: root.recentTags,
+            pomodoroWorkDuration: root.pomodoroWorkDuration,
+            pomodoroShortBreakDuration: root.pomodoroShortBreakDuration,
+            pomodoroLongBreakDuration: root.pomodoroLongBreakDuration,
+            pomodoroCyclesTarget: root.pomodoroCyclesTarget,
             lastSaved: new Date().toISOString()
         }
         dataFile.setText(JSON.stringify(payload, null, 2))
@@ -201,7 +227,8 @@ BarWidget {
             if (root.sessionDuration > 0) {
                 root.saveSessionRecord()
             }
-            if (root.pomodoroCyclesCompleted % 4 === 0) {
+            var target = root.pomodoroCyclesTarget > 0 ? root.pomodoroCyclesTarget : 4
+            if (root.pomodoroCyclesCompleted % target === 0) {
                 root.pomodoroPhase = "longBreak"
                 root.remainingSeconds = root.pomodoroLongBreakDuration
             } else {
@@ -277,6 +304,40 @@ BarWidget {
         if (phase === "work") root.remainingSeconds = root.pomodoroWorkDuration
         else if (phase === "shortBreak") root.remainingSeconds = root.pomodoroShortBreakDuration
         else if (phase === "longBreak") root.remainingSeconds = root.pomodoroLongBreakDuration
+    }
+
+    function setPomodoroDuration(phase, seconds) {
+        if (!seconds || seconds <= 0) return
+        var sec = Math.round(seconds)
+        if (phase === "work") {
+            root.pomodoroWorkDuration = sec
+            if (!root.isRunning && root.pomodoroPhase === "work" && root.activeMode === "pomodoro") {
+                root.remainingSeconds = sec
+            }
+        } else if (phase === "shortBreak") {
+            root.pomodoroShortBreakDuration = sec
+            if (!root.isRunning && root.pomodoroPhase === "shortBreak" && root.activeMode === "pomodoro") {
+                root.remainingSeconds = sec
+            }
+        } else if (phase === "longBreak") {
+            root.pomodoroLongBreakDuration = sec
+            if (!root.isRunning && root.pomodoroPhase === "longBreak" && root.activeMode === "pomodoro") {
+                root.remainingSeconds = sec
+            }
+        }
+        root.saveToDisk()
+    }
+
+    function setPomodoroPreset(workMin, shortBreakMin, longBreakMin) {
+        root.pomodoroWorkDuration = Math.round(workMin * 60)
+        root.pomodoroShortBreakDuration = Math.round(shortBreakMin * 60)
+        root.pomodoroLongBreakDuration = Math.round(longBreakMin * 60)
+        if (!root.isRunning && root.activeMode === "pomodoro") {
+            if (root.pomodoroPhase === "work") root.remainingSeconds = root.pomodoroWorkDuration
+            else if (root.pomodoroPhase === "shortBreak") root.remainingSeconds = root.pomodoroShortBreakDuration
+            else if (root.pomodoroPhase === "longBreak") root.remainingSeconds = root.pomodoroLongBreakDuration
+        }
+        root.saveToDisk()
     }
 
     function addTag(tag) {

@@ -151,7 +151,7 @@ function aggregateTagStats(history, scope) {
 // 7-Zeilen GitHub Aktivitätsgraph (Montag bis Sonntag)
 // -----------------------------------------------------------------------------
 function buildHeatmap(history, numWeeks) {
-    if (!numWeeks || numWeeks < 1) numWeeks = 14;
+    if (!numWeeks || numWeeks < 1) numWeeks = 52;
     var historyList = Array.isArray(history) ? history : [];
 
     var dayMap = {};
@@ -183,6 +183,7 @@ function buildHeatmap(history, numWeeks) {
 
     for (var w = 0; w < numWeeks; w++) {
         var days = [];
+        var monthLabel = "";
         for (var d = 0; d < 7; d++) {
             var cellDate = new Date(startMon.getTime() + (w * 7 + d) * 86400000);
             var dk = dateKey(cellDate);
@@ -191,6 +192,11 @@ function buildHeatmap(history, numWeeks) {
             var info = dayMap[dk] || { totalSeconds: 0, tags: {} };
             var sec = info.totalSeconds;
             var mins = Math.round(sec / 60);
+
+            // Prüfen, ob in dieser Woche ein neuer Monat beginnt
+            if (cellDate.getDate() === 1 || (w === 0 && d === 0 && cellDate.getDate() < 18)) {
+                monthLabel = MONAT_NAMEN[cellDate.getMonth()];
+            }
 
             var level = 0;
             if (mins >= 120) level = 4;
@@ -219,8 +225,12 @@ function buildHeatmap(history, numWeeks) {
                 focusTimeStr: sec > 0 ? formatDurationHuman(sec) : "0 Min.",
                 hoursDec: formatHoursDecimal(sec),
                 level: level,
-                dominantTags: dominantTagsStr
+                dominantTags: dominantTagsStr,
+                monthLabel: ""
             });
+        }
+        if (days.length > 0) {
+            days[0].monthLabel = monthLabel;
         }
         weeks.push(days);
     }
@@ -329,20 +339,25 @@ function aggregateAppUsage(history, currentAppUsage, scope, selectedTag) {
 function defaultSampleHistory() {
     var now = new Date();
     var list = [];
-    var tags = ["Mathe", "Programmieren", "Physik", "Lesen", "Recherche"];
-    var apps = ["antigravity", "firefox", "alacritty", "code", "obsidian"];
+    var tags = ["Mathe", "Programmieren", "Physik", "Lesen", "Recherche", "Englisch"];
+    var apps = ["alacritty", "firefox", "code", "obsidian", "terminal"];
 
-    for (var d = 13; d >= 0; d--) {
-        if (d % 4 === 1 && d !== 1) continue;
-        var count = (d % 3 === 0) ? 2 : 1;
+    // Erzeuge realistische Lerneinheiten über das ganze Jahr (364 Tage = 52 Wochen)
+    for (var d = 364; d >= 0; d--) {
+        // Pausentage: ca. 2 Tage pro Woche, plus etwas Varianz
+        var dayOfWeek = (new Date(now.getTime() - d * 86400000).getDay() + 6) % 7;
+        var skip = (d > 14 && (d % 7 === 5 || (d % 11 === 0 && dayOfWeek === 6)));
+        if (skip) continue;
+
+        var count = (d % 5 === 0) ? 2 : (d % 9 === 0 ? 3 : 1);
         for (var c = 0; c < count; c++) {
             var sessDate = new Date(now.getTime() - d * 86400000 - (c * 2 + 1) * 3600000);
             var tag = tags[(d + c) % tags.length];
-            var dur = ((d % 2 === 0 ? 30 : 50) + c * 20) * 60;
+            var dur = ((d % 3 === 0 ? 25 : (d % 2 === 0 ? 50 : 30)) + c * 15) * 60;
             var app1 = apps[(d) % apps.length];
             var app2 = apps[(d + 1) % apps.length];
             var appMap = {};
-            appMap[app1] = Math.round(dur * 0.7);
+            appMap[app1] = Math.round(dur * 0.75);
             appMap[app2] = dur - appMap[app1];
 
             list.push({
