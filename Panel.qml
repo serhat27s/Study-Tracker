@@ -57,6 +57,16 @@ Panel {
         return (w.elapsedSeconds % 3600) / 3600
     }
 
+    readonly property string currentPomodoroPreset: {
+        if (!w) return "standard"
+        var workMin = Math.round(w.pomodoroWorkDuration / 60)
+        var shortMin = Math.round(w.pomodoroShortBreakDuration / 60)
+        if (workMin === 50 && shortMin === 10) return "deepWork"
+        if (workMin === 90 && shortMin === 20) return "ultradian"
+        if (workMin === 25 && shortMin === 5) return "standard"
+        return ""
+    }
+
     readonly property var heatmapData: w
         ? Model.buildHeatmap(w.history, root.heatmapYear)
         : { year: root.heatmapYear, weeks: [], numWeeks: 0, todayWeekIndex: 0, totalSeconds: 0, yearHours: "0.0 Std.", todayHours: "0.0 Std.", totalHours: "0.0 Std.", streakDays: 0, sessionCount: 0 }
@@ -217,6 +227,11 @@ Panel {
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: seg.picked(modelData.value)
+                    }
+
+                    PanelToolTip {
+                        visible: segMouse.containsMouse && Boolean(modelData.tip && modelData.tip.length > 0)
+                        text: modelData.tip || ""
                     }
                 }
             }
@@ -472,11 +487,12 @@ Panel {
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 text: {
                                                     if (!root.w) return ""
-                                                    var state = root.running ? "" : " · pausiert"
-                                                    if (!root.isPomodoro) return "Stoppuhr" + (root.running ? " · läuft" : " · bereit")
-                                                    if (root.w.pomodoroPhase === "shortBreak") return "Kurze Pause" + state
-                                                    if (root.w.pomodoroPhase === "longBreak") return "Lange Pause" + state
-                                                    return "Fokus" + state
+                                                    var isPaused = !root.running && (root.w.sessionDuration > 0 || (root.isPomodoro && root.w.remainingSeconds !== root.phaseTotal))
+                                                    var state = root.running ? "" : (isPaused ? " · pausiert" : " · bereit")
+                                                    if (!root.isPomodoro) return "Stoppuhr" + (root.running ? " · läuft" : (isPaused ? " · pausiert" : " · bereit"))
+                                                    if (root.w.pomodoroPhase === "shortBreak") return "Kurze Pause (" + Math.round(root.w.pomodoroShortBreakDuration / 60) + "m)" + state
+                                                    if (root.w.pomodoroPhase === "longBreak") return "Lange Pause (" + Math.round(root.w.pomodoroLongBreakDuration / 60) + "m)" + state
+                                                    return "Fokus (" + Math.round(root.w.pomodoroWorkDuration / 60) + "m)" + state
                                                 }
                                                 font.family: Style.font.family
                                                 font.pixelSize: Style.font.caption
@@ -519,7 +535,7 @@ Panel {
                                         }
                                     }
 
-                                    // Phasen-Auswahl (Pomodoro) mit Einstellungs-Button bzw. Info-Zeile (Stoppuhr)
+                                    // Pomodoro-Presets (Standard, Deep Work, Ultradian) mit Einstellungs-Button bzw. Info-Zeile (Stoppuhr)
                                     RowLayout {
                                         width: parent.width
                                         visible: root.isPomodoro
@@ -529,13 +545,18 @@ Panel {
                                             Layout.fillWidth: true
                                             Layout.preferredHeight: Style.space(26)
                                             fg: root.fg
-                                            value: root.w ? root.w.pomodoroPhase : "work"
+                                            value: root.currentPomodoroPreset
                                             options: [
-                                                { value: "work", label: "Fokus " + (root.w ? Math.round(root.w.pomodoroWorkDuration / 60) : 25) + "m" },
-                                                { value: "shortBreak", label: "Pause " + (root.w ? Math.round(root.w.pomodoroShortBreakDuration / 60) : 5) + "m" },
-                                                { value: "longBreak", label: "Lang " + (root.w ? Math.round(root.w.pomodoroLongBreakDuration / 60) : 15) + "m" }
+                                                { value: "standard", label: "Standard", tip: "Standard: 25m Fokus · 5m Pause · 15m Lang" },
+                                                { value: "deepWork", label: "Deep Work", tip: "Deep Work: 50m Fokus · 10m Pause · 30m Lang" },
+                                                { value: "ultradian", label: "Ultradian", tip: "Ultradian: 90m Fokus · 20m Pause" }
                                             ]
-                                            onPicked: function(v) { if (root.w) root.w.setPomodoroPhase(v) }
+                                            onPicked: function(v) {
+                                                if (!root.w) return
+                                                if (v === "standard") root.w.setPomodoroPreset(25, 5, 15)
+                                                else if (v === "deepWork") root.w.setPomodoroPreset(50, 10, 30)
+                                                else if (v === "ultradian") root.w.setPomodoroPreset(90, 20, 20)
+                                            }
                                         }
 
                                         // Button zum Öffnen der Pomodoro-Zeiteinstellungen
@@ -620,67 +641,30 @@ Panel {
                                                 }
                                             }
 
-                                            // Schnell-Presets
-                                            Row {
+                                            // Phase manuell wählen (Fokus / Kurze Pause / Lange Pause)
+                                            RowLayout {
                                                 width: parent.width
-                                                spacing: Style.space(4)
+                                                spacing: Style.space(6)
 
-                                                Repeater {
-                                                    model: [
-                                                        { name: "Standard", times: "25 / 5 / 15", work: 25, short: 5, long: 15, tip: "Standard: 25m Fokus, 5m Pause, 15m Lange Pause" },
-                                                        { name: "Deep Work", times: "50 / 10 / 30", work: 50, short: 10, long: 30, tip: "Deep Work: 50m Fokus, 10m Pause, 30m Lange Pause" },
-                                                        { name: "Ultradian", times: "90 / 20", work: 90, short: 20, long: 30, tip: "Ultradian: 90m Fokus, 20m Pause" }
+                                                Text {
+                                                    text: "Phase:"
+                                                    font.family: Style.font.family
+                                                    font.pixelSize: Style.font.caption
+                                                    color: root.dim
+                                                }
+
+                                                Segmented {
+                                                    Layout.fillWidth: true
+                                                    Layout.preferredHeight: Style.space(24)
+                                                    fg: root.fg
+                                                    fontSize: Style.font.caption * 0.85
+                                                    value: root.w ? root.w.pomodoroPhase : "work"
+                                                    options: [
+                                                        { value: "work", label: "Fokus" },
+                                                        { value: "shortBreak", label: "Kurze Pause" },
+                                                        { value: "longBreak", label: "Lange Pause" }
                                                     ]
-
-                                                    Rectangle {
-                                                        id: presetCard
-                                                        width: (parent.width - Style.space(8)) / 3
-                                                        height: Style.space(32)
-                                                        radius: Style.space(6)
-                                                        readonly property bool isCurrent: root.w
-                                                            && Math.round(root.w.pomodoroWorkDuration / 60) === modelData.work
-                                                            && Math.round(root.w.pomodoroShortBreakDuration / 60) === modelData.short
-                                                        color: isCurrent
-                                                            ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.25)
-                                                            : (preMouse.containsMouse ? root.surfaceHover : root.surface)
-                                                        border.width: 1
-                                                        border.color: isCurrent ? Color.accent : root.hairline
-
-                                                        Column {
-                                                            anchors.centerIn: parent
-                                                            spacing: Style.space(1)
-
-                                                            Text {
-                                                                anchors.horizontalCenter: parent.horizontalCenter
-                                                                text: modelData.name
-                                                                font.family: Style.font.family
-                                                                font.pixelSize: Style.font.caption * 0.85
-                                                                font.bold: true
-                                                                color: presetCard.isCurrent ? Color.accent : root.fg
-                                                            }
-
-                                                            Text {
-                                                                anchors.horizontalCenter: parent.horizontalCenter
-                                                                text: modelData.times
-                                                                font.family: Style.font.family
-                                                                font.pixelSize: Style.font.caption * 0.72
-                                                                color: presetCard.isCurrent ? Color.accent : root.dim
-                                                            }
-                                                        }
-
-                                                        MouseArea {
-                                                            id: preMouse
-                                                            anchors.fill: parent
-                                                            hoverEnabled: true
-                                                            cursorShape: Qt.PointingHandCursor
-                                                            onClicked: if (root.w) root.w.setPomodoroPreset(modelData.work, modelData.short, modelData.long)
-                                                        }
-
-                                                        PanelToolTip {
-                                                            visible: preMouse.containsMouse
-                                                            text: modelData.tip
-                                                        }
-                                                    }
+                                                    onPicked: function(v) { if (root.w) root.w.setPomodoroPhase(v) }
                                                 }
                                             }
 
