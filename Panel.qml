@@ -490,7 +490,10 @@ Panel {
                                                     var isPaused = !root.running && (root.w.sessionDuration > 0 || (root.isPomodoro && root.w.remainingSeconds !== root.phaseTotal))
                                                     var state = root.running ? "" : (isPaused ? " · pausiert" : " · bereit")
                                                     if (!root.isPomodoro) return "Stoppuhr" + (root.running ? " · läuft" : (isPaused ? " · pausiert" : " · bereit"))
-                                                    if (root.w.pomodoroPhase === "shortBreak") return "Kurze Pause (" + Math.round(root.w.pomodoroShortBreakDuration / 60) + "m)" + state
+                                                    if (root.w.pomodoroPhase === "shortBreak") {
+                                                        var hasNoLong = root.w.pomodoroLongBreakDuration <= 0
+                                                        return (hasNoLong ? "Pause (" : "Kurze Pause (") + Math.round(root.w.pomodoroShortBreakDuration / 60) + "m)" + state
+                                                    }
                                                     if (root.w.pomodoroPhase === "longBreak") return "Lange Pause (" + Math.round(root.w.pomodoroLongBreakDuration / 60) + "m)" + state
                                                     return "Fokus (" + Math.round(root.w.pomodoroWorkDuration / 60) + "m)" + state
                                                 }
@@ -499,11 +502,11 @@ Panel {
                                                 color: root.dim
                                             }
 
-                                            // Zyklus-Punkte (nur Pomodoro)
+                                            // Zyklus-Punkte (nur Pomodoro mit langer Pause)
                                             Row {
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 spacing: Style.space(4)
-                                                visible: root.isPomodoro
+                                                visible: root.isPomodoro && (!root.w || root.w.pomodoroLongBreakDuration > 0)
 
                                                 Repeater {
                                                     model: 4
@@ -555,7 +558,7 @@ Panel {
                                                 if (!root.w) return
                                                 if (v === "standard") root.w.setPomodoroPreset(25, 5, 15)
                                                 else if (v === "deepWork") root.w.setPomodoroPreset(50, 10, 30)
-                                                else if (v === "ultradian") root.w.setPomodoroPreset(90, 20, 20)
+                                                else if (v === "ultradian") root.w.setPomodoroPreset(90, 20, 0)
                                             }
                                         }
 
@@ -641,13 +644,19 @@ Panel {
                                                 }
                                             }
 
-                                            // 3 Stepper-Zeilen: Fokus, Kurze Pause, Lange Pause
+                                            // Stepper-Zeilen: Fokus, Pause, evtl. Lange Pause
                                             Repeater {
-                                                model: [
-                                                    { phase: "work", icon: "🎯", label: "Fokus-Zeit", step: 5, min: 5, max: 120 },
-                                                    { phase: "shortBreak", icon: "☕", label: "Kurze Pause", step: 1, min: 1, max: 30 },
-                                                    { phase: "longBreak", icon: "🛋️", label: "Lange Pause", step: 5, min: 5, max: 60 }
-                                                ]
+                                                model: {
+                                                    var isNoLongBreak = root.w && root.w.pomodoroLongBreakDuration <= 0
+                                                    var list = [
+                                                        { phase: "work", icon: "🎯", label: "Fokus-Zeit", step: 5, min: 5, max: 120 },
+                                                        { phase: "shortBreak", icon: "☕", label: isNoLongBreak ? "Pause" : "Kurze Pause", step: 1, min: 1, max: 60 }
+                                                    ]
+                                                    if (!isNoLongBreak) {
+                                                        list.push({ phase: "longBreak", icon: "🛋️", label: "Lange Pause", step: 5, min: 5, max: 60 })
+                                                    }
+                                                    return list
+                                                }
 
                                                 RowLayout {
                                                     id: stepperRow

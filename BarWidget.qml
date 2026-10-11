@@ -100,7 +100,9 @@ BarWidget {
                         root.pomodoroWorkDuration = Number(parsed.pomodoroWorkDuration)
                     if (parsed.pomodoroShortBreakDuration && Number(parsed.pomodoroShortBreakDuration) > 0)
                         root.pomodoroShortBreakDuration = Number(parsed.pomodoroShortBreakDuration)
-                    if (parsed.pomodoroLongBreakDuration && Number(parsed.pomodoroLongBreakDuration) > 0)
+                    if (parsed.hasOwnProperty && parsed.hasOwnProperty("pomodoroLongBreakDuration") && !isNaN(Number(parsed.pomodoroLongBreakDuration)))
+                        root.pomodoroLongBreakDuration = Math.max(0, Number(parsed.pomodoroLongBreakDuration))
+                    else if (parsed.pomodoroLongBreakDuration && Number(parsed.pomodoroLongBreakDuration) > 0)
                         root.pomodoroLongBreakDuration = Number(parsed.pomodoroLongBreakDuration)
                     if (parsed.pomodoroCyclesTarget && Number(parsed.pomodoroCyclesTarget) > 0)
                         root.pomodoroCyclesTarget = Number(parsed.pomodoroCyclesTarget)
@@ -228,7 +230,7 @@ BarWidget {
                 root.saveSessionRecord()
             }
             var target = root.pomodoroCyclesTarget > 0 ? root.pomodoroCyclesTarget : 4
-            if (root.pomodoroCyclesCompleted % target === 0) {
+            if (root.pomodoroLongBreakDuration > 0 && root.pomodoroCyclesCompleted % target === 0) {
                 root.pomodoroPhase = "longBreak"
                 root.remainingSeconds = root.pomodoroLongBreakDuration
             } else {
@@ -298,6 +300,9 @@ BarWidget {
 
     function setPomodoroPhase(phase) {
         root.isRunning = false
+        if (phase === "longBreak" && root.pomodoroLongBreakDuration <= 0) {
+            phase = "shortBreak"
+        }
         root.pomodoroPhase = phase
         if (phase === "work") root.remainingSeconds = root.pomodoroWorkDuration
         else if (phase === "shortBreak") root.remainingSeconds = root.pomodoroShortBreakDuration
@@ -329,7 +334,10 @@ BarWidget {
     function setPomodoroPreset(workMin, shortBreakMin, longBreakMin) {
         root.pomodoroWorkDuration = Math.round(workMin * 60)
         root.pomodoroShortBreakDuration = Math.round(shortBreakMin * 60)
-        root.pomodoroLongBreakDuration = Math.round(longBreakMin * 60)
+        root.pomodoroLongBreakDuration = Math.round((longBreakMin || 0) * 60)
+        if (root.pomodoroLongBreakDuration <= 0 && root.pomodoroPhase === "longBreak") {
+            root.pomodoroPhase = "shortBreak"
+        }
         if (!root.isRunning && root.activeMode === "pomodoro") {
             if (root.pomodoroPhase === "work") root.remainingSeconds = root.pomodoroWorkDuration
             else if (root.pomodoroPhase === "shortBreak") root.remainingSeconds = root.pomodoroShortBreakDuration
