@@ -1,4 +1,4 @@
-// Model.js - Kernlogik für Study Tracker (Pomodoro, Stoppuhr, Tag-Statistiken, Heatmap & Uptime)
+// Model.js - Core logic for Study Tracker (Pomodoro, Stopwatch, Subject Stats, Heatmap & Uptime)
 
 function padZero(n) {
     return n < 10 ? "0" + n : "" + n;
@@ -21,34 +21,34 @@ function formatSeconds(total) {
 }
 
 function formatDurationHuman(total) {
-    if (!total || total <= 0) return "0 Min.";
+    if (!total || total <= 0) return "0 min";
     var hrs = Math.floor(total / 3600);
     var mins = Math.floor((total % 3600) / 60);
     var secs = total % 60;
     if (hrs > 0) {
-        return mins > 0 ? (hrs + " Std. " + mins + " Min.") : (hrs + " Std.");
+        return mins > 0 ? (hrs + (hrs === 1 ? " hr " : " hrs ") + mins + " min") : (hrs + (hrs === 1 ? " hr" : " hrs"));
     }
     if (mins > 0) {
-        return mins + " Min.";
+        return mins + " min";
     }
-    return secs + " Sek.";
+    return secs + " sec";
 }
 
 function formatHoursDecimal(total) {
-    if (!total || total <= 0) return "0.0 Std.";
+    if (!total || total <= 0) return "0.0 hrs";
     var h = (total / 3600).toFixed(1);
-    return h + " Std.";
+    return h + (h === "1.0" ? " hr" : " hrs");
 }
 
 function formatUptime(totalSec) {
-    if (!totalSec || totalSec <= 0) return "0 Min.";
+    if (!totalSec || totalSec <= 0) return "0 min";
     var days = Math.floor(totalSec / 86400);
     var hrs = Math.floor((totalSec % 86400) / 3600);
     var mins = Math.floor((totalSec % 3600) / 60);
     var parts = [];
-    if (days > 0) parts.push(days + (days === 1 ? " Tag" : " Tage"));
-    if (hrs > 0) parts.push(hrs + (hrs === 1 ? " Std." : " Std."));
-    if (mins > 0 || parts.length === 0) parts.push(mins + " Min.");
+    if (days > 0) parts.push(days + (days === 1 ? " day" : " days"));
+    if (hrs > 0) parts.push(hrs + (hrs === 1 ? " hr" : " hrs"));
+    if (mins > 0 || parts.length === 0) parts.push(mins + " min");
     return parts.join(", ");
 }
 
@@ -70,6 +70,15 @@ var TAG_COLORS = [
 ];
 
 var DEFAULT_TAG_COLORS = {
+    // English defaults
+    "Math": "#3b82f6",
+    "Coding": "#10b981",
+    "Physics": "#8b5cf6",
+    "Reading": "#f59e0b",
+    "Research": "#06b6d4",
+    "English": "#ec4899",
+    "General": "#64748b",
+    // Backward compatibility for existing German tags
     "Mathe": "#3b82f6",
     "Programmieren": "#10b981",
     "Physik": "#8b5cf6",
@@ -96,8 +105,8 @@ function tagColor(tagName, customMap) {
     return TAG_COLORS[Math.abs(hash) % TAG_COLORS.length];
 }
 
-var MONAT_NAMEN = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
-var TAGE_NAMEN = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+var MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+var DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 function formatDateReadable(keyStr) {
     if (!keyStr) return "";
@@ -105,13 +114,13 @@ function formatDateReadable(keyStr) {
     if (parts.length !== 3) return keyStr;
     var d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
     var dayIdx = (d.getDay() + 6) % 7;
-    return TAGE_NAMEN[dayIdx] + ", " + d.getDate() + ". " + MONAT_NAMEN[d.getMonth()];
+    return DAY_NAMES[dayIdx] + ", " + MONTH_NAMES[d.getMonth()] + " " + d.getDate();
 }
 
 // -----------------------------------------------------------------------------
-// Tag-Stunden-Auswertung ("Wie viele Stunden für welches Fach/Tag")
+// Subject Hours Analysis ("How many hours for which subject/tag")
 // -----------------------------------------------------------------------------
-// Prüft, ob ein Zeitstempel in den Zeitraum fällt: "today" | "week" (letzte 7 Tage) | sonst alles
+// Checks whether a timestamp falls into the scope: "today" | "week" (last 7 days) | all
 function inScope(timestamp, scope) {
     if (scope === "today") {
         return dateKey(new Date(timestamp)) === dateKey(new Date());
@@ -133,7 +142,7 @@ function aggregateTagStats(history, scope) {
         var sess = historyList[i];
         if (!sess || !sess.duration) continue;
         if (!inScope(sess.timestamp, scope)) continue;
-        var tag = sess.tag || "Allgemein";
+        var tag = sess.tag || "General";
         if (!tagMap[tag]) {
             tagMap[tag] = { tag: tag, totalSeconds: 0, sessionCount: 0 };
         }
@@ -168,7 +177,7 @@ function aggregateTagStats(history, scope) {
 }
 
 // -----------------------------------------------------------------------------
-// 7-Zeilen GitHub Aktivitätsgraph: Kalenderjahr (Januar bis Dezember)
+// 7-Row GitHub Activity Graph: Calendar year (January to December)
 // -----------------------------------------------------------------------------
 function buildHeatmap(history, year) {
     var targetYear = (typeof year === "number" && year >= 2000) ? Math.round(year) : new Date().getFullYear();
@@ -183,20 +192,20 @@ function buildHeatmap(history, year) {
             dayMap[dk] = { totalSeconds: 0, tags: {} };
         }
         dayMap[dk].totalSeconds += sess.duration;
-        var tag = sess.tag || "Allgemein";
+        var tag = sess.tag || "General";
         dayMap[dk].tags[tag] = (dayMap[dk].tags[tag] || 0) + sess.duration;
     }
 
     var today = new Date();
     var todayDk = dateKey(today);
 
-    // Start: Montag der Woche, die den 1. Januar enthält
+    // Start: Monday of week containing Jan 1
     var jan1 = new Date(targetYear, 0, 1);
-    var jan1Day = (jan1.getDay() + 6) % 7; // Montag = 0, Sonntag = 6
+    var jan1Day = (jan1.getDay() + 6) % 7; // Monday = 0, Sunday = 6
     var startMon = new Date(targetYear, 0, 1 - jan1Day);
     startMon.setHours(0, 0, 0, 0);
 
-    // Ende: Sonntag der Woche, die den 31. Dezember enthält
+    // End: Sunday of week containing Dec 31
     var dec31 = new Date(targetYear, 11, 31);
     var dec31Day = (dec31.getDay() + 6) % 7;
     var endSun = new Date(targetYear, 11, 31 + (6 - dec31Day));
@@ -231,7 +240,7 @@ function buildHeatmap(history, year) {
             if (!isOutsideYear) {
                 yearSecondsLogged += sec;
                 if (cellDate.getDate() === 1 || (w === 0 && cellDate.getDate() === jan1.getDate())) {
-                    monthLabel = MONAT_NAMEN[cellDate.getMonth()];
+                    monthLabel = MONTH_NAMES[cellDate.getMonth()];
                 }
             }
 
@@ -260,7 +269,7 @@ function buildHeatmap(history, year) {
                 isOutsideYear: isOutsideYear,
                 totalSeconds: sec,
                 totalMinutes: mins,
-                focusTimeStr: sec > 0 ? formatDurationHuman(sec) : "0 Min.",
+                focusTimeStr: sec > 0 ? formatDurationHuman(sec) : "0 min",
                 hoursDec: formatHoursDecimal(sec),
                 level: level,
                 dominantTags: dominantTagsStr,
@@ -312,7 +321,7 @@ function buildHeatmap(history, year) {
 }
 
 // -----------------------------------------------------------------------------
-// Programm-Nutzung (Stunden pro App)
+// Application Usage (Hours per app)
 // -----------------------------------------------------------------------------
 function aggregateAppUsage(history, currentAppUsage, scope, selectedTag) {
     var historyList = Array.isArray(history) ? history : [];
@@ -378,17 +387,17 @@ function aggregateAppUsage(history, currentAppUsage, scope, selectedTag) {
 }
 
 // -----------------------------------------------------------------------------
-// Realistische Beispieldaten auf Deutsch
+// Sample history with English default subjects
 // -----------------------------------------------------------------------------
 function defaultSampleHistory() {
     var now = new Date();
     var list = [];
-    var tags = ["Mathe", "Programmieren", "Physik", "Lesen", "Recherche", "Englisch"];
+    var tags = ["Math", "Coding", "Physics", "Reading", "Research", "English"];
     var apps = ["alacritty", "firefox", "code", "obsidian", "terminal"];
 
-    // Erzeuge realistische Lerneinheiten über das ganze Jahr (364 Tage = 52 Wochen)
+    // Generate realistic study sessions across the entire year (364 days = 52 weeks)
     for (var d = 364; d >= 0; d--) {
-        // Pausentage: ca. 2 Tage pro Woche, plus etwas Varianz
+        // Rest days: ~2 days per week, plus some variance
         var dayOfWeek = (new Date(now.getTime() - d * 86400000).getDay() + 6) % 7;
         var skip = (d > 14 && (d % 7 === 5 || (d % 11 === 0 && dayOfWeek === 6)));
         if (skip) continue;

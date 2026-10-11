@@ -15,7 +15,7 @@ Panel {
     property var hostWidget: null
     property var rootWidget: null
 
-    // 0: Fokus (Timer + Aktivität), 1: Statistik (Stunden pro Fach), 2: System (Uptime + Programme)
+    // 0: Focus (Timer + Activity), 1: Statistics (Hours per Subject), 2: System (Uptime + Apps)
     property int currentTab: 0
 
     property bool tagMenuOpen: false
@@ -27,29 +27,29 @@ Panel {
     property bool pomodoroSettingsOpen: false
 
     readonly property var colorPalette: [
-        "#ef4444", // Rot
+        "#ef4444", // Red
         "#f97316", // Orange
-        "#f59e0b", // Bernstein
-        "#eab308", // Gelb
-        "#84cc16", // Limette
-        "#10b981", // Smaragd
-        "#14b8a6", // Türkis
+        "#f59e0b", // Amber
+        "#eab308", // Yellow
+        "#84cc16", // Lime
+        "#10b981", // Emerald
+        "#14b8a6", // Teal
         "#06b6d4", // Cyan
-        "#3b82f6", // Blau
+        "#3b82f6", // Blue
         "#6366f1", // Indigo
-        "#8b5cf6", // Violett
+        "#8b5cf6", // Purple
         "#d946ef", // Fuchsia
         "#ec4899", // Pink
-        "#64748b"  // Schiefergrau
+        "#64748b"  // Slate
     ]
 
     property string tagStatsScope: "week"   // "today" | "week" | "all"
     property string appScope: "today"       // "current" | "today" | "week" | "all"
-    property string appTagFilter: ""        // "" = alle Fächer
+    property string appTagFilter: ""        // "" = all subjects
     property var hoveredCell: null
     property int heatmapYear: new Date().getFullYear()
 
-    // Feste Panelgröße – 420x560 kompakter Standard
+    // Fixed panel dimensions: 420x560 compact standard
     readonly property int panelWidth: Style.space(420)
     readonly property int panelInnerHeight: Style.space(560)
 
@@ -63,7 +63,7 @@ Panel {
     readonly property var w: root.rootWidget
     readonly property bool running: w ? w.isRunning : false
     readonly property bool isPomodoro: w ? w.activeMode === "pomodoro" : true
-    readonly property string activeTag: w ? w.activeTag : "Allgemein"
+    readonly property string activeTag: w ? w.activeTag : "General"
 
     readonly property int phaseTotal: {
         if (!w) return 1500
@@ -89,19 +89,19 @@ Panel {
 
     readonly property var heatmapData: w
         ? Model.buildHeatmap(w.history, root.heatmapYear)
-        : { year: root.heatmapYear, weeks: [], numWeeks: 0, todayWeekIndex: 0, totalSeconds: 0, yearHours: "0.0 Std.", todayHours: "0.0 Std.", totalHours: "0.0 Std.", streakDays: 0, sessionCount: 0 }
+        : { year: root.heatmapYear, weeks: [], numWeeks: 0, todayWeekIndex: 0, totalSeconds: 0, yearHours: "0.0 hrs", todayHours: "0.0 hrs", totalHours: "0.0 hrs", streakDays: 0, sessionCount: 0 }
 
     readonly property var tagStatsData: w
         ? Model.aggregateTagStats(w.history, root.tagStatsScope)
-        : { tags: [], grandTotalSeconds: 0, grandTotalFormatted: "0 Min.", grandTotalHours: "0.0 Std." }
+        : { tags: [], grandTotalSeconds: 0, grandTotalFormatted: "0 min", grandTotalHours: "0.0 hrs" }
 
     readonly property var weekStats: w
         ? Model.aggregateTagStats(w.history, "week")
-        : { grandTotalHours: "0.0 Std." }
+        : { grandTotalHours: "0.0 hrs" }
 
     readonly property var appUsageData: w
         ? Model.aggregateAppUsage(w.history, w.currentAppUsage, root.appScope, root.appTagFilter)
-        : { apps: [], totalSeconds: 0, totalFormatted: "0 Min.", totalHours: "0.0 Std." }
+        : { apps: [], totalSeconds: 0, totalFormatted: "0 min", totalHours: "0.0 hrs" }
 
     function colorForTag(name) {
         if (!name) return Color.accent
@@ -388,8 +388,8 @@ Panel {
                     fontSize: Style.font.bodySmall
                     value: "" + root.currentTab
                     options: [
-                        { value: "0", label: "Fokus", icon: "󰔛" },
-                        { value: "1", label: "Statistik", icon: "󰄨" },
+                        { value: "0", label: "Focus", icon: "󰔛" },
+                        { value: "1", label: "Statistics", icon: "󰄨" },
                         { value: "2", label: "System", icon: "󰍹" }
                     ]
                     onPicked: function(v) { root.setTab(parseInt(v)) }
@@ -401,7 +401,7 @@ Panel {
                     currentIndex: root.currentTab
 
                     // =========================================================
-                    // TAB 1: FOKUS
+                    // TAB 1: FOCUS
                     // =========================================================
                     Flickable {
                         id: focusFlick
@@ -416,7 +416,7 @@ Panel {
                             width: focusFlick.width
                             spacing: Style.space(14)
 
-                            // ---------------- Timer-Karte ----------------
+                            // ---------------- Timer Card ----------------
                             Rectangle {
                                 width: parent.width
                                 implicitHeight: timerCol.implicitHeight + Style.space(28)
@@ -437,14 +437,14 @@ Panel {
                                     anchors.margins: Style.space(14)
                                     spacing: Style.space(10)
 
-                                    // Modus
+                                    // Mode
                                     Segmented {
                                         width: parent.width
                                         fg: root.fg
                                         value: root.isPomodoro ? "pomodoro" : "tracker"
                                         options: [
                                             { value: "pomodoro", label: "Pomodoro", icon: "󰄉" },
-                                            { value: "tracker", label: "Stoppuhr", icon: "󱎫" }
+                                            { value: "tracker", label: "Stopwatch", icon: "󱎫" }
                                         ]
                                         onPicked: function(v) { if (root.w) root.w.setMode(v) }
                                     }
@@ -539,14 +539,14 @@ Panel {
                                                 text: {
                                                     if (!root.w) return ""
                                                     var isPaused = !root.running && (root.w.sessionDuration > 0 || (root.isPomodoro && root.w.remainingSeconds !== root.phaseTotal))
-                                                    var state = root.running ? "" : (isPaused ? " · pausiert" : " · bereit")
-                                                    if (!root.isPomodoro) return "Stoppuhr" + (root.running ? " · läuft" : (isPaused ? " · pausiert" : " · bereit"))
+                                                    var state = root.running ? "" : (isPaused ? " · paused" : " · ready")
+                                                    if (!root.isPomodoro) return "Stopwatch" + (root.running ? " · running" : (isPaused ? " · paused" : " · ready"))
                                                     if (root.w.pomodoroPhase === "shortBreak") {
                                                         var hasNoLong = root.w.pomodoroLongBreakDuration <= 0
-                                                        return (hasNoLong ? "Pause (" : "Kurze Pause (") + Math.round(root.w.pomodoroShortBreakDuration / 60) + "m)" + state
+                                                        return (hasNoLong ? "Break (" : "Short Break (") + Math.round(root.w.pomodoroShortBreakDuration / 60) + "m)" + state
                                                     }
-                                                    if (root.w.pomodoroPhase === "longBreak") return "Lange Pause (" + Math.round(root.w.pomodoroLongBreakDuration / 60) + "m)" + state
-                                                    return "Fokus (" + Math.round(root.w.pomodoroWorkDuration / 60) + "m)" + state
+                                                    if (root.w.pomodoroPhase === "longBreak") return "Long Break (" + Math.round(root.w.pomodoroLongBreakDuration / 60) + "m)" + state
+                                                    return "Focus (" + Math.round(root.w.pomodoroWorkDuration / 60) + "m)" + state
                                                 }
                                                 font.family: Style.font.family
                                                 font.pixelSize: Style.font.caption
@@ -589,7 +589,7 @@ Panel {
                                         }
                                     }
 
-                                    // Pomodoro-Presets (Standard, Deep Work, Ultradian) mit Einstellungs-Button bzw. Info-Zeile (Stoppuhr)
+                                    // Pomodoro Presets (Standard, Deep Work, Ultradian) & Settings button
                                     RowLayout {
                                         width: parent.width
                                         visible: root.isPomodoro
@@ -601,9 +601,9 @@ Panel {
                                             fg: root.fg
                                             value: root.currentPomodoroPreset
                                             options: [
-                                                { value: "standard", label: "Standard", tip: "Standard: 25m Fokus · 5m Pause · 15m Lang" },
-                                                { value: "deepWork", label: "Deep Work", tip: "Deep Work: 50m Fokus · 10m Pause · 30m Lang" },
-                                                { value: "ultradian", label: "Ultradian", tip: "Ultradian: 90m Fokus · 20m Pause" }
+                                                { value: "standard", label: "Standard", tip: "Standard: 25m Focus · 5m Break · 15m Long" },
+                                                { value: "deepWork", label: "Deep Work", tip: "Deep Work: 50m Focus · 10m Break · 30m Long" },
+                                                { value: "ultradian", label: "Ultradian", tip: "Ultradian: 90m Focus · 20m Break" }
                                             ]
                                             onPicked: function(v) {
                                                 if (!root.w) return
@@ -613,7 +613,7 @@ Panel {
                                             }
                                         }
 
-                                        // Button zum Öffnen der Pomodoro-Zeiteinstellungen
+                                        // Button to open Pomodoro duration settings
                                         Rectangle {
                                             Layout.preferredWidth: Style.space(26)
                                             Layout.preferredHeight: Style.space(26)
@@ -642,7 +642,7 @@ Panel {
 
                                             PanelToolTip {
                                                 visible: pomoGearMouse.containsMouse
-                                                text: "Pomodoro-Dauer anpassen (Fokus & Pausen)"
+                                                text: "Adjust Pomodoro duration (Focus & Breaks)"
                                             }
                                         }
                                     }
@@ -669,7 +669,7 @@ Panel {
                                                 width: parent.width
 
                                                 Text {
-                                                    text: "POMODORO ZEITEN ANPASSEN"
+                                                    text: "ADJUST POMODORO TIMES"
                                                     font.family: Style.font.family
                                                     font.pixelSize: Style.font.caption * 0.85
                                                     font.bold: true
@@ -695,16 +695,16 @@ Panel {
                                                 }
                                             }
 
-                                            // Stepper-Zeilen: Fokus, Pause, evtl. Lange Pause
+                                            // Stepper rows: Focus, Break, Long Break
                                             Repeater {
                                                 model: {
                                                     var isNoLongBreak = root.w && root.w.pomodoroLongBreakDuration <= 0
                                                     var list = [
-                                                        { phase: "work", icon: "🎯", label: "Fokus-Zeit", step: 5, min: 5, max: 120 },
-                                                        { phase: "shortBreak", icon: "☕", label: isNoLongBreak ? "Pause" : "Kurze Pause", step: 1, min: 1, max: 60 }
+                                                        { phase: "work", icon: "🎯", label: "Focus Duration", step: 5, min: 5, max: 120 },
+                                                        { phase: "shortBreak", icon: "☕", label: isNoLongBreak ? "Break" : "Short Break", step: 1, min: 1, max: 60 }
                                                     ]
                                                     if (!isNoLongBreak) {
-                                                        list.push({ phase: "longBreak", icon: "🛋️", label: "Lange Pause", step: 5, min: 5, max: 60 })
+                                                        list.push({ phase: "longBreak", icon: "🛋️", label: "Long Break", step: 5, min: 5, max: 60 })
                                                     }
                                                     return list
                                                 }
@@ -723,7 +723,7 @@ Panel {
                                                         Layout.fillWidth: true
                                                     }
 
-                                                    // Stepper: [-]  X Min.  [+]
+                                                    // Stepper: [-]  X min  [+]
                                                     Row {
                                                         spacing: Style.space(4)
 
@@ -759,7 +759,7 @@ Panel {
                                                             }
                                                         }
 
-                                                        // Anzeige Minuten
+                                                        // Minutes display
                                                         Rectangle {
                                                             width: Style.space(54)
                                                             height: Style.space(24)
@@ -770,7 +770,7 @@ Panel {
 
                                                             Text {
                                                                 anchors.centerIn: parent
-                                                                text: Math.round(stepperRow.currentSec / 60) + " Min."
+                                                                text: Math.round(stepperRow.currentSec / 60) + " min"
                                                                 font.family: Style.font.family
                                                                 font.pixelSize: Style.font.caption
                                                                 font.bold: true
@@ -815,24 +815,24 @@ Panel {
                                         }
                                     }
 
-                                    // Stoppuhr Info-Zeile
+                                    // Stopwatch info line
                                     Text {
                                         width: parent.width
                                         visible: !root.isPomodoro
                                         horizontalAlignment: Text.AlignHCenter
                                         elide: Text.ElideRight
-                                        text: "Heute gelernt: " + root.heatmapData.todayHours
+                                        text: "Studied today: " + root.heatmapData.todayHours
                                         font.family: Style.font.family
                                         font.pixelSize: Style.font.caption
                                         color: root.dim
                                     }
 
-                                    // Steuerung
+                                    // Controls
                                     RowLayout {
                                         width: parent.width
                                         spacing: Style.space(8)
 
-                                        // Primärer Start/Pause-Button
+                                        // Primary Start/Pause button
                                         Rectangle {
                                             Layout.fillWidth: true
                                             Layout.preferredHeight: Style.space(34)
@@ -861,7 +861,7 @@ Panel {
                                             }
                                         }
 
-                                        // Zurücksetzen-Button (speichert angefangene Sessions ab 1 Min. automatisch)
+                                        // Reset button (automatically logs started sessions >= 1 min)
                                         Rectangle {
                                             readonly property bool canReset: root.w && (
                                                 root.running
@@ -896,7 +896,7 @@ Panel {
 
                                             PanelToolTip {
                                                 visible: resetMouse.containsMouse
-                                                text: "Zurücksetzen (r)"
+                                                text: "Reset (r)"
                                             }
                                         }
                                     }
@@ -925,14 +925,14 @@ Panel {
 
                                         SectionLabel {
                                             fg: root.fg
-                                            text: "AKTIVITÄT " + root.heatmapYear
+                                            text: "ACTIVITY " + root.heatmapYear
                                         }
 
-                                        // Navigation: Monate scrollen & Heute
+                                        // Navigation: scroll months & Today
                                         Row {
                                             spacing: Style.space(3)
 
-                                            // Nach links (frühere Monate)
+                                            // Left (earlier months)
                                             Rectangle {
                                                 width: Style.space(20)
                                                 height: Style.space(20)
@@ -963,11 +963,11 @@ Panel {
 
                                                 PanelToolTip {
                                                     visible: scrollLeftMouse.containsMouse
-                                                    text: "Frühere Monate anzeigen"
+                                                    text: "View earlier months"
                                                 }
                                             }
 
-                                            // Nach rechts (spätere Monate)
+                                            // Right (later months)
                                             Rectangle {
                                                 width: Style.space(20)
                                                 height: Style.space(20)
@@ -999,30 +999,30 @@ Panel {
 
                                                 PanelToolTip {
                                                     visible: scrollRightMouse.containsMouse
-                                                    text: "Spätere Monate anzeigen"
+                                                    text: "View later months"
                                                 }
                                             }
 
-                                            // Heute-Button
+                                            // Today Button
                                             Rectangle {
                                                 height: Style.space(20)
-                                                implicitWidth: heuteLabel.implicitWidth + Style.space(10)
+                                                implicitWidth: todayLabel.implicitWidth + Style.space(10)
                                                 radius: Style.space(4)
-                                                color: heuteMouse.containsMouse ? root.surfaceHover : "transparent"
+                                                color: todayMouse.containsMouse ? root.surfaceHover : "transparent"
                                                 border.width: 1
                                                 border.color: root.hairline
 
                                                 Text {
-                                                    id: heuteLabel
+                                                    id: todayLabel
                                                     anchors.centerIn: parent
-                                                    text: "Heute"
+                                                    text: "Today"
                                                     font.family: Style.font.family
                                                     font.pixelSize: Style.font.caption * 0.82
                                                     color: root.fg
                                                 }
 
                                                 MouseArea {
-                                                    id: heuteMouse
+                                                    id: todayMouse
                                                     anchors.fill: parent
                                                     cursorShape: Qt.PointingHandCursor
                                                     onClicked: {
@@ -1034,8 +1034,8 @@ Panel {
                                                 }
 
                                                 PanelToolTip {
-                                                    visible: heuteMouse.containsMouse
-                                                    text: "Zu aktuellen Monaten / Heute springen"
+                                                    visible: todayMouse.containsMouse
+                                                    text: "Jump to current months / Today"
                                                 }
                                             }
                                         }
@@ -1043,7 +1043,7 @@ Panel {
                                         Item { Layout.fillWidth: true }
 
                                         Text {
-                                            text: "󰈸 " + root.heatmapData.streakDays + " Tage Streak"
+                                            text: "󰈸 " + root.heatmapData.streakDays + (root.heatmapData.streakDays === 1 ? " Day Streak" : " Days Streak")
                                             font.family: Style.font.family
                                             font.pixelSize: Style.font.caption
                                             font.bold: true
@@ -1056,14 +1056,14 @@ Panel {
                                         width: parent.width
                                         spacing: Style.space(6)
 
-                                        // Wochentage links (Mo, Mi, Fr, So)
+                                        // Weekdays left (Mon, Wed, Fri, Sun)
                                         Column {
                                             id: weekdayCol
-                                            y: Style.space(15) // Offset für Monatsleiste oben
+                                            y: Style.space(15) // Offset for top month row
                                             spacing: Style.space(3)
 
                                             Repeater {
-                                                model: ["Mo", "", "Mi", "", "Fr", "", "So"]
+                                                model: ["Mon", "", "Wed", "", "Fri", "", "Sun"]
                                                 Text {
                                                     width: Style.space(18)
                                                     height: Style.space(11)
@@ -1179,7 +1179,7 @@ Panel {
                                         }
                                     }
 
-                                    // Legende unten rechts (unten links frei)
+                                    // Legend bottom right
                                     RowLayout {
                                         width: parent.width
                                         height: Style.space(18)
@@ -1191,7 +1191,7 @@ Panel {
                                             spacing: Style.space(3)
                                             Text {
                                                 anchors.verticalCenter: parent.verticalCenter
-                                                text: "weniger"
+                                                text: "less"
                                                 font.family: Style.font.family
                                                 font.pixelSize: Style.font.caption * 0.8
                                                 color: root.faint
@@ -1210,7 +1210,7 @@ Panel {
                                             }
                                             Text {
                                                 anchors.verticalCenter: parent.verticalCenter
-                                                text: "mehr"
+                                                text: "more"
                                                 font.family: Style.font.family
                                                 font.pixelSize: Style.font.caption * 0.8
                                                 color: root.faint
@@ -1223,7 +1223,7 @@ Panel {
                     }
 
                     // =========================================================
-                    // TAB 2: STATISTIK (Stunden pro Fach)
+                    // TAB 2: STATISTICS (Hours per Subject)
                     // =========================================================
                     ColumnLayout {
                         spacing: Style.space(12)
@@ -1236,7 +1236,7 @@ Panel {
                                 Layout.fillWidth: true
                                 Layout.preferredWidth: 1
                                 fg: root.fg
-                                label: "HEUTE"
+                                label: "TODAY"
                                 value: root.heatmapData.todayHours
                                 valueColor: Color.accent
                             }
@@ -1244,14 +1244,14 @@ Panel {
                                 Layout.fillWidth: true
                                 Layout.preferredWidth: 1
                                 fg: root.fg
-                                label: "7 TAGE"
+                                label: "7 DAYS"
                                 value: root.weekStats.grandTotalHours
                             }
                             StatTile {
                                 Layout.fillWidth: true
                                 Layout.preferredWidth: 1
                                 fg: root.fg
-                                label: "GESAMT"
+                                label: "TOTAL"
                                 value: root.heatmapData.totalHours
                             }
                             StatTile {
@@ -1259,7 +1259,7 @@ Panel {
                                 Layout.preferredWidth: 1
                                 fg: root.fg
                                 label: "STREAK"
-                                value: root.heatmapData.streakDays + " Tage"
+                                value: root.heatmapData.streakDays + (root.heatmapData.streakDays === 1 ? " Day" : " Days")
                             }
                         }
 
@@ -1270,7 +1270,7 @@ Panel {
                             SectionLabel {
                                 Layout.fillWidth: true
                                 fg: root.fg
-                                text: "STUNDEN NACH FACH"
+                                text: "HOURS BY SUBJECT"
                             }
                             Segmented {
                                 Layout.preferredWidth: Style.space(180)
@@ -1278,9 +1278,9 @@ Panel {
                                 fg: root.fg
                                 value: root.tagStatsScope
                                 options: [
-                                    { value: "today", label: "Heute" },
-                                    { value: "week", label: "Woche" },
-                                    { value: "all", label: "Gesamt" }
+                                    { value: "today", label: "Today" },
+                                    { value: "week", label: "Week" },
+                                    { value: "all", label: "Total" }
                                 ]
                                 onPicked: function(v) { root.tagStatsScope = v }
                             }
@@ -1375,7 +1375,7 @@ Panel {
 
                                     PanelToolTip {
                                         visible: tagRowMouse.containsMouse
-                                        text: modelData.sessionCount + " Sessions · " + modelData.hoursDec + " · Klick: als aktives Fach setzen"
+                                        text: modelData.sessionCount + " Sessions · " + modelData.hoursDec + " · Click: set as active subject"
                                     }
                                 }
                             }
@@ -1383,7 +1383,7 @@ Panel {
                             Text {
                                 anchors.centerIn: parent
                                 visible: tagList.count === 0
-                                text: "Noch keine Lernzeit in diesem Zeitraum"
+                                text: "No study time logged in this period"
                                 font.family: Style.font.family
                                 font.pixelSize: Style.font.caption
                                 color: root.dim
@@ -1392,12 +1392,13 @@ Panel {
                     }
 
                     // =========================================================
-                    // TAB 3: SYSTEM (Uptime + Programme)
+                    // =========================================================
+                    // TAB 3: SYSTEM (Uptime + Apps)
                     // =========================================================
                     ColumnLayout {
                         spacing: Style.space(12)
 
-                        // Uptime-Karte
+                        // Uptime Card
                         Rectangle {
                             Layout.fillWidth: true
                             Layout.preferredHeight: Style.space(64)
@@ -1434,7 +1435,7 @@ Panel {
                                         width: parent.width
                                         fg: root.fg
                                         font.pixelSize: Style.font.caption * 0.85
-                                        text: "SYSTEM LÄUFT SEIT"
+                                        text: "SYSTEM UPTIME"
                                     }
                                     Text {
                                         width: parent.width
@@ -1452,7 +1453,7 @@ Panel {
 
                                     Text {
                                         anchors.right: parent.right
-                                        text: "GESTARTET"
+                                        text: "BOOTED"
                                         font.family: Style.font.family
                                         font.pixelSize: Style.font.caption * 0.85
                                         font.bold: true
@@ -1464,7 +1465,7 @@ Panel {
                                             var up = root.w ? root.w.systemUptimeSeconds : 0
                                             if (up <= 0) return "–"
                                             var d = new Date(Date.now() - up * 1000)
-                                            return Model.padZero(d.getHours()) + ":" + Model.padZero(d.getMinutes()) + " Uhr"
+                                            return Model.padZero(d.getHours()) + ":" + Model.padZero(d.getMinutes())
                                         }
                                         font.family: Style.font.family
                                         font.pixelSize: Style.font.bodySmall
@@ -1481,7 +1482,7 @@ Panel {
                             SectionLabel {
                                 Layout.fillWidth: true
                                 fg: root.fg
-                                text: "PROGRAMMNUTZUNG"
+                                text: "APPLICATION USAGE"
                             }
                             Text {
                                 text: root.appUsageData.totalFormatted
@@ -1499,14 +1500,14 @@ Panel {
                             value: root.appScope
                             options: [
                                 { value: "current", label: "Session" },
-                                { value: "today", label: "Heute" },
-                                { value: "week", label: "Woche" },
-                                { value: "all", label: "Gesamt" }
+                                { value: "today", label: "Today" },
+                                { value: "week", label: "Week" },
+                                { value: "all", label: "Total" }
                             ]
                             onPicked: function(v) { root.appScope = v }
                         }
 
-                        // Fach-Filter: horizontal scrollbar, feste Höhe
+                        // Subject Filter: horizontally scrollable, fixed height
                         ListView {
                             id: filterList
                             Layout.fillWidth: true
@@ -1533,7 +1534,7 @@ Panel {
                                 Text {
                                     id: chipText
                                     anchors.centerIn: parent
-                                    text: modelData === "" ? "Alle Fächer" : modelData
+                                    text: modelData === "" ? "All Subjects" : modelData
                                     font.family: Style.font.family
                                     font.pixelSize: Style.font.caption
                                     font.bold: parent.sel
@@ -1571,7 +1572,7 @@ Panel {
                                         width: parent.width
                                         spacing: Style.space(8)
 
-                                        // Initiale als App-"Icon"
+                                        // Initial as app icon
                                         Rectangle {
                                             Layout.preferredWidth: Style.space(22)
                                             Layout.preferredHeight: Style.space(22)
@@ -1644,8 +1645,8 @@ Panel {
                                 Text {
                                     anchors.horizontalCenter: parent.horizontalCenter
                                     text: root.appScope === "current"
-                                        ? "Starte den Timer, um Programme zu erfassen"
-                                        : "Keine Programmnutzung in diesem Zeitraum"
+                                        ? "Start the timer to track applications"
+                                        : "No application usage logged in this period"
                                     font.family: Style.font.family
                                     font.pixelSize: Style.font.caption
                                     color: root.dim
@@ -1657,7 +1658,7 @@ Panel {
             }
 
             // -----------------------------------------------------------------
-            // Tag-Menü (schwebt über dem Inhalt → Panelgröße bleibt konstant)
+            // Subject Menu (floats above content → panel dimensions stay constant)
             // -----------------------------------------------------------------
             MouseArea {
                 anchors.fill: parent
@@ -1682,7 +1683,7 @@ Panel {
                 opacity: root.tagMenuOpen ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: 120 } }
 
-                // Klicks im Menü nicht zum Schließen durchreichen
+                // Do not propagate clicks inside menu to close area
                 MouseArea { anchors.fill: parent }
 
                 Column {
@@ -1693,13 +1694,13 @@ Panel {
                     anchors.margins: Style.space(8)
                     spacing: Style.space(6)
 
-                    // Eingabe ganz oben: Farb-Vorschau + tippen → neues Fach anlegen
+                    // Input on top: color preview + type → create new subject
                     RowLayout {
                         id: tagInputRow
                         width: parent.width
                         spacing: Style.space(6)
 
-                        // Farbwähler-Button für neues Fach
+                        // Color picker button for new subject
                         Rectangle {
                             id: newTagColorBtn
                             Layout.preferredWidth: Style.space(28)
@@ -1731,7 +1732,7 @@ Panel {
 
                             PanelToolTip {
                                 visible: parent.containsMouse || false
-                                text: root.newTagColor.length > 0 ? ("Gewählte Farbe: " + root.newTagColor) : "Farbe wählen (optional)"
+                                text: root.newTagColor.length > 0 ? ("Selected color: " + root.newTagColor) : "Choose color (optional)"
                             }
                         }
 
@@ -1740,7 +1741,7 @@ Panel {
                             Layout.fillWidth: true
                             Layout.preferredHeight: Style.space(28)
                             foreground: root.fg
-                            placeholderText: "Neues Fach…"
+                            placeholderText: "New Subject…"
                             font.family: Style.font.family
                             font.pixelSize: Style.font.bodySmall
                             maximumLength: 24
@@ -1778,7 +1779,7 @@ Panel {
                         color: root.hairline
                     }
 
-                    // Gefilterte Liste vorhandener Fächer
+                    // Filtered list of existing subjects
                     ListView {
                         id: tagMenuList
                         readonly property var filtered: {
@@ -1816,7 +1817,7 @@ Panel {
                                 anchors.rightMargin: Style.space(6)
                                 spacing: Style.space(6)
 
-                                // Klickbarer Farbpunkt
+                                // Clickable color dot
                                 Rectangle {
                                     id: tagDotBtn
                                     Layout.preferredWidth: Style.space(12)
@@ -1839,7 +1840,7 @@ Panel {
 
                                     PanelToolTip {
                                         visible: dotMouse.containsMouse
-                                        text: "Farbe für „" + modelData + "“ anpassen"
+                                        text: "Customize color for “" + modelData + "”"
                                     }
                                 }
 
@@ -1853,7 +1854,7 @@ Panel {
                                     color: root.fg
                                 }
 
-                                // Farbpalette-Icon
+                                // Color palette icon
                                 Text {
                                     id: tagPalIcon
                                     visible: isColorTarget || rowMouse.containsMouse
@@ -1875,11 +1876,11 @@ Panel {
 
                                     PanelToolTip {
                                         visible: palIconMouse.containsMouse
-                                        text: "Farbe anpassen"
+                                        text: "Customize color"
                                     }
                                 }
 
-                                // Haken wenn aktiv
+                                // Checkmark when active
                                 Text {
                                     visible: sel && !rowMouse.containsMouse && !isColorTarget
                                     text: "󰄬"
@@ -1888,7 +1889,7 @@ Panel {
                                     color: tagCol
                                 }
 
-                                // Papierkorb
+                                // Trash icon
                                 Text {
                                     visible: rowMouse.containsMouse
                                     text: "󰆴"
@@ -1910,7 +1911,7 @@ Panel {
 
                                     PanelToolTip {
                                         visible: trashMouse.containsMouse
-                                        text: "Fach löschen"
+                                        text: "Delete subject"
                                     }
                                 }
                             }
@@ -1932,7 +1933,7 @@ Panel {
                         Text {
                             anchors.centerIn: parent
                             visible: tagMenuList.count === 0
-                            text: "Enter → \"" + tagInput.text.trim() + "\" anlegen"
+                            text: "Enter → create \"" + tagInput.text.trim() + "\""
                             width: parent.width
                             horizontalAlignment: Text.AlignHCenter
                             elide: Text.ElideRight
@@ -1943,7 +1944,7 @@ Panel {
                     }
                 }
 
-                // Schwebendes / mitwanderndes Farbwahl-Menü (direkt über dem gewählten Tag)
+                // Floating / tracking color picker menu (directly positioned above selected tag)
                 Rectangle {
                     id: colorPaletteCard
                     z: 60
@@ -1960,7 +1961,7 @@ Panel {
                     opacity: root.activeColorTarget.length > 0 ? 1 : 0
                     Behavior on opacity { NumberAnimation { duration: 140 } }
 
-                    // Klicks in der Palette nicht an die Liste darunter durchreichen
+                    // Do not propagate clicks inside palette to list underneath
                     MouseArea { anchors.fill: parent }
 
                     Column {
@@ -1971,7 +1972,7 @@ Panel {
                         anchors.margins: Style.space(6)
                         spacing: Style.space(6)
 
-                        // Titelzeile
+                        // Title row
                         RowLayout {
                             width: parent.width
                             spacing: Style.space(6)
@@ -1988,8 +1989,8 @@ Panel {
                             Text {
                                 Layout.fillWidth: true
                                 text: root.activeColorTarget === "__new__"
-                                    ? "Farbe für neues Fach:"
-                                    : "Farbe für „" + root.activeColorTarget + "“:"
+                                    ? "Color for new subject:"
+                                    : "Color for “" + root.activeColorTarget + "”:"
                                 elide: Text.ElideRight
                                 font.family: Style.font.family
                                 font.pixelSize: Style.font.caption * 0.85
@@ -2062,7 +2063,7 @@ Panel {
                             }
                         }
 
-                        // Hex-Eingabe + Auto-Button
+                        // Hex input + Auto button
                         RowLayout {
                             width: parent.width
                             spacing: Style.space(6)
@@ -2072,7 +2073,7 @@ Panel {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: Style.space(24)
                                 foreground: root.fg
-                                placeholderText: "#HEX Code (z.B. #ff5500)"
+                                placeholderText: "#HEX Code (e.g. #ff5500)"
                                 font.family: Style.font.family
                                 font.pixelSize: Style.font.caption * 0.85
                                 maximumLength: 7
@@ -2119,7 +2120,7 @@ Panel {
 
                                 PanelToolTip {
                                     visible: autoBtnMouse.containsMouse
-                                    text: "Automatische Standardfarbe verwenden"
+                                    text: "Use automatic default color"
                                 }
                             }
                         }

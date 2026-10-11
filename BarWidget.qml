@@ -10,31 +10,31 @@ BarWidget {
     id: root
     moduleName: "io.github.yourname.study-tracker"
 
-    // Timer-Modi & Dauern (in Sekunden)
+    // Timer modes & durations (in seconds)
     property string activeMode: "pomodoro" // "pomodoro" | "tracker"
     property string pomodoroPhase: "work"  // "work" | "shortBreak" | "longBreak"
     property int pomodoroWorkDuration: 1500       // 25m
     property int pomodoroShortBreakDuration: 300  // 5m
     property int pomodoroLongBreakDuration: 900   // 15m
-    property int pomodoroCyclesTarget: 4          // 4 Zyklen
+    property int pomodoroCyclesTarget: 4          // 4 cycles
     property int pomodoroCyclesCompleted: 0
 
-    property string activeTag: "Mathe"
-    property var recentTags: ["Mathe", "Programmieren", "Physik", "Lesen", "Recherche"]
+    property string activeTag: "Math"
+    property var recentTags: ["Math", "Coding", "Physics", "Reading", "Research"]
     property var tagColors: ({})
 
     property int remainingSeconds: 1500
     property int elapsedSeconds: 0
-    property int sessionDuration: 0        // Sekunden der laufenden Session
+    property int sessionDuration: 0        // Seconds of running session
     property bool isRunning: false
 
-    // System-Uptime in Sekunden
+    // System uptime in seconds
     property int systemUptimeSeconds: 0
 
-    // App-Nutzung für aktive Session: { [appName]: seconds }
+    // App usage for active session: { [appName]: seconds }
     property var currentAppUsage: ({})
 
-    // Gespeicherte Sessions: [ { id, tag, mode, duration, timestamp, app_usage } ]
+    // Saved sessions: [ { id, tag, mode, duration, timestamp, app_usage } ]
     property var history: []
 
     readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
@@ -59,7 +59,7 @@ BarWidget {
     onBarChanged: injectPanel()
 
     // -------------------------------------------------------------------------
-    // Speicherung & Persistenz
+    // Storage & Persistence
     // -------------------------------------------------------------------------
     readonly property string dataDir: Quickshell.env("HOME") + "/.local/share/study-tracker"
     readonly property string dataPath: dataDir + "/data.json"
@@ -147,7 +147,7 @@ BarWidget {
     }
 
     // -------------------------------------------------------------------------
-    // System-Uptime Ermittlung
+    // System Uptime Tracking
     // -------------------------------------------------------------------------
     Process {
         id: uptimeProc
@@ -175,7 +175,7 @@ BarWidget {
     }
 
     // -------------------------------------------------------------------------
-    // Aktives Fenster Tracking & Session Ticker
+    // Active Window Tracking & Session Ticker
     // -------------------------------------------------------------------------
     function getCurrentActiveApp() {
         try {
@@ -224,13 +224,13 @@ BarWidget {
     }
 
     // -------------------------------------------------------------------------
-    // Statuswechsel & Aktionen
+    // State Transitions & Actions
     // -------------------------------------------------------------------------
     function handlePomodoroFinished() {
         root.isRunning = false
         if (root.pomodoroPhase === "work") {
             root.pomodoroCyclesCompleted += 1
-            root.notify("Pomodoro beendet! 🍅", "Großartige Lerneinheit! Zeit für eine Pause.")
+            root.notify("Pomodoro Finished! 🍅", "Great focus session! Time for a break.")
             if (root.sessionDuration > 0) {
                 root.saveSessionRecord()
             }
@@ -243,7 +243,7 @@ BarWidget {
                 root.remainingSeconds = root.pomodoroShortBreakDuration
             }
         } else {
-            root.notify("Pause vorbei! ☕", "Bereit für den nächsten Fokus-Block?")
+            root.notify("Break Over! ☕", "Ready for the next focus block?")
             root.pomodoroPhase = "work"
             root.remainingSeconds = root.pomodoroWorkDuration
         }
@@ -253,7 +253,7 @@ BarWidget {
         if (root.sessionDuration <= 0) return
         var newRecord = {
             id: "sess_" + Date.now(),
-            tag: root.activeTag || "Allgemein",
+            tag: root.activeTag || "General",
             mode: root.activeMode,
             duration: root.sessionDuration,
             timestamp: new Date().toISOString(),
@@ -394,7 +394,7 @@ BarWidget {
         var idx = tags.indexOf(clean)
         if (idx !== -1) {
             tags.splice(idx, 1)
-            if (tags.length === 0) tags = ["Allgemein"]
+            if (tags.length === 0) tags = ["General"]
             root.recentTags = tags
             if (root.activeTag === clean) {
                 root.activeTag = tags[0]
@@ -437,7 +437,7 @@ BarWidget {
         anchors.fill: parent
         bar: root.bar
         text: (root.isRunning ? (root.activeMode === "pomodoro" ? "󰄉 " : "󰔛 ") : (root.activeMode === "pomodoro" ? "󰔟 " : "󱎫 ")) + root.formattedTime() + " · 🏷️ " + root.activeTag
-        tooltipText: "Study Tracker (" + (root.activeMode === "pomodoro" ? (root.pomodoroPhase === "work" ? "Pomodoro" : "Pause") : "Stoppuhr") + ") — Klick: Panel öffnen, Rechtsklick: " + (root.isRunning ? "Pause" : "Start")
+        tooltipText: "Study Tracker (" + (root.activeMode === "pomodoro" ? (root.pomodoroPhase === "work" ? "Pomodoro" : "Break") : "Stopwatch") + ") — Click: Open panel, Right-click: " + (root.isRunning ? "Pause" : "Start")
         onPressed: function(buttonCode) {
             if (buttonCode === Qt.LeftButton) root.toggle()
             else if (buttonCode === Qt.RightButton) root.toggleRunning()
