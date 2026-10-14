@@ -69,8 +69,6 @@ const consHours = Model.calculateConsistency(history, 1800, {
     targetHours: 1.0,
     weekendsEnabled: true
 });
-assert.strictEqual(consHours.todaySeconds, 3600); // 1800 logged + 1800 live
-assert.strictEqual(consHours.todayMet, true);
 assert.strictEqual(consHours.goalStreak, 2); // Today (1h) + Yesterday (1h)
 assert.strictEqual(consHours.weekDays.length, 7);
 
@@ -79,7 +77,49 @@ const consBlocks = Model.calculateConsistency(
     88 * 60,
     { goalMode: "blocks", targetBlocks: 3, blockPreset: "ultradian", weekendsEnabled: false }
 );
-assert.strictEqual(consBlocks.todayBlocks, 3); // 2 from 180m + 1 from 88m live
-assert.strictEqual(consBlocks.todayMet, true);
+const todayIdx = (now.getDay() + 6) % 7;
+assert.strictEqual(consBlocks.weekDays[todayIdx].blocks, 3); // 2 from 180m + 1 from 88m live
+
+// 6. Midnight session splitting (22:00 -> 01:00 = 2h day 1 + 1h day 2)
+const afterMidnight = new Date(2026, 9, 14, 1, 0, 0); // 01:00 local time
+const splitRecs = Model.splitSessionRecords(3 * 3600, afterMidnight, "Coding", "tracker", { code: 10800 });
+assert.strictEqual(splitRecs.length, 2);
+assert.strictEqual(splitRecs[0].duration, 3600);  // 00:00..01:00 on Oct 14
+assert.strictEqual(Model.dateKey(new Date(splitRecs[0].timestamp)), "2026-10-14");
+assert.strictEqual(splitRecs[0].app_usage.code, 3600);
+assert.strictEqual(splitRecs[1].duration, 7200);  // 22:00..24:00 on Oct 13 (no 1s loss)
+assert.strictEqual(Model.dateKey(new Date(splitRecs[1].timestamp)), "2026-10-13");
+
+// 7. Rest-day streak bridging across weekends when weekendsEnabled is false
+const streakHist = [];
+let expectedRequiredStreak = 0;
+for (let d = 1; d <= 5; d++) {
+    const dt = new Date(now.getFullYear(), now.getMonth(), now.getDate() - d, 12, 0, 0);
+    const dow = (dt.getDay() + 6) % 7;
+    if (dow < 5) {
+        streakHist.push({ id: "s_" + d, tag: "Math", duration: 4 * 3600, timestamp: dt.toISOString() });
+        expectedRequiredStreak++;
+    }
+}
+const bridged = Model.calculateConsistency(streakHist, 0, {
+    goalMode: "hours",
+    targetHours: 4.0,
+    weekendsEnabled: false
+});
+assert.strictEqual(bridged.goalStreak, expectedRequiredStreak);
+
+// 8. Deep Work Quality (Shallow <25m, Focused 25-50m, Deep >=50m)
+const qualHist = [
+    { id: "q1", tag: "Math", duration: 15 * 60, timestamp: now.toISOString() },   // Shallow (900s)
+    { id: "q2", tag: "Coding", duration: 30 * 60, timestamp: now.toISOString() }, // Focused (1800s)
+    { id: "q3", tag: "Physics", duration: 90 * 60, timestamp: now.toISOString() } // Deep (5400s)
+];
+const qual = Model.calculateSessionQuality(qualHist, "today");
+assert.strictEqual(qual.totalCount, 3);
+assert.strictEqual(qual.avgMinutes, 45);
+assert.strictEqual(qual.tiers[0].count, 1); // Deep
+assert.strictEqual(qual.tiers[1].count, 1); // Focused
+assert.strictEqual(qual.tiers[2].count, 1); // Shallow
+assert.strictEqual(qual.deepPct, 67);
 
 console.log("All Model.js tests passed.");

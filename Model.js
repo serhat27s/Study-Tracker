@@ -195,28 +195,81 @@ function formatDateReadable(keyStr) {
 // -----------------------------------------------------------------------------
 // Subject Hours Analysis ("How many hours for which subject/tag")
 // -----------------------------------------------------------------------------
-// Checks whether a timestamp falls into the scope: "today" | "week" (last 7 days) | all
-function inScope(timestamp, scope) {
+// Returns a predicate function that checks whether a timestamp falls into the scope: "today" | "week" (last 7 days) | "month" (last 30 days) | all
+function makeScopeMatcher(scope) {
     if (scope === "today") {
-        return dateKey(new Date(timestamp)) === dateKey(new Date());
+        var todayKey = dateKey(new Date());
+        return function(timestamp) {
+            return dateKey(new Date(timestamp)) === todayKey;
+        };
     }
     if (scope === "week") {
         var now = new Date();
-        var start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
-        return new Date(timestamp).getTime() >= start.getTime();
+        var startMs = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6).getTime();
+        return function(timestamp) {
+            return new Date(timestamp).getTime() >= startMs;
+        };
     }
-    return true;
+    if (scope === "month") {
+        var nowM = new Date();
+        var startMonthMs = new Date(nowM.getFullYear(), nowM.getMonth(), nowM.getDate() - 29).getTime();
+        return function(timestamp) {
+            return new Date(timestamp).getTime() >= startMonthMs;
+        };
+    }
+    return function() { return true; };
+}
+
+// Splits a session that crosses local midnight into per-day session records
+function splitSessionRecords(durationSeconds, endDate, tag, mode, appUsage) {
+    var dur = Math.max(0, Math.floor(durationSeconds || 0));
+    if (dur <= 0) return [];
+    var end = (endDate instanceof Date) ? new Date(endDate.getTime()) : new Date(endDate);
+    var startMs = end.getTime() - dur * 1000;
+    var records = [];
+    var curEndMs = end.getTime();
+    var idx = 0;
+
+    while (curEndMs > startMs) {
+        var curDate = new Date(curEndMs - 1);
+        var dayStartMs = new Date(curDate.getFullYear(), curDate.getMonth(), curDate.getDate()).getTime();
+        var segStartMs = Math.max(startMs, dayStartMs);
+        var segSec = Math.round((curEndMs - segStartMs) / 1000);
+        if (segSec > 0) {
+            var scaledUsage = {};
+            if (appUsage && typeof appUsage === "object") {
+                var ratio = segSec / dur;
+                for (var app in appUsage) {
+                    var val = Math.round((appUsage[app] || 0) * ratio);
+                    if (val > 0) scaledUsage[app] = val;
+                }
+            }
+            var tsDate = (idx === 0) ? new Date(curEndMs) : new Date(curEndMs - 1);
+            records.push({
+                id: "sess_" + tsDate.getTime() + (idx > 0 ? "_" + idx : ""),
+                tag: tag || "General",
+                mode: mode || "pomodoro",
+                duration: segSec,
+                timestamp: tsDate.toISOString(),
+                app_usage: scaledUsage
+            });
+            idx++;
+        }
+        curEndMs = dayStartMs;
+    }
+    return records;
 }
 
 function aggregateTagStats(history, scope) {
     var historyList = Array.isArray(history) ? history : [];
     var tagMap = {};
+    var matchesScope = makeScopeMatcher(scope);
 
     var grandTotalSeconds = 0;
     for (var i = 0; i < historyList.length; i++) {
         var sess = historyList[i];
         if (!sess || !sess.duration) continue;
-        if (!inScope(sess.timestamp, scope)) continue;
+        if (!matchesScope(sess.timestamp)) continue;
         var tag = sess.tag || "General";
         if (!tagMap[tag]) {
             tagMap[tag] = { tag: tag, totalSeconds: 0, sessionCount: 0 };
@@ -248,6 +301,88 @@ function aggregateTagStats(history, scope) {
         grandTotalSeconds: grandTotalSeconds,
         grandTotalFormatted: formatDurationHuman(grandTotalSeconds),
         grandTotalHours: formatHoursDecimal(grandTotalSeconds)
+    };
+}
+
+// -----------------------------------------------------------------------------
+// Deep Work Quality Analysis (Shallow <25m | Focused 25m-50m | Deep >=50m)
+// -----------------------------------------------------------------------------
+function calculateSessionQuality(history, scope) {
+    var historyList = Array.isArray(history) ? history : [];
+    var matchesScope = makeScopeMatcher(scope || "week");
+
+    var shallowSec = 0, shallowCount = 0;
+    var focusedSec = 0, focusedCount = 0;
+    var deepSec = 0, deepCount = 0;
+
+    // 2m grace: 23m (1380s) counts as Focused (25m), 48m (2880s) counts as Deep (50m)
+    var focusedMinSec = 23 * 60;
+    var deepMinSec = 48 * 60;
+
+    for (var i = 0; i < historyList.length; i++) {
+        var sess = historyList[i];
+        if (!sess || !sess.duration) continue;
+        if (!matchesScope(sess.timestamp)) continue;
+        var d = sess.duration;
+        if (d >= deepMinSec) {
+            deepSec += d;
+            deepCount++;
+        } else if (d >= focusedMinSec) {
+            focusedSec += d;
+            focusedCount++;
+        } else {
+            shallowSec += d;
+            shallowCount++;
+        }
+    }
+
+    var totalSec = shallowSec + focusedSec + deepSec;
+    var totalCount = shallowCount + focusedCount + deepCount;
+    var avgMinutes = totalCount > 0 ? Math.round((totalSec / totalCount) / 60) : 0;
+
+    var deepPct = totalSec > 0 ? Math.round((deepSec / totalSec) * 100) : 0;
+    var focusedPct = totalSec > 0 ? Math.round((focusedSec / totalSec) * 100) : 0;
+    var shallowPct = totalSec > 0 ? Math.max(0, 100 - deepPct - focusedPct) : 0;
+
+    return {
+        totalSeconds: totalSec,
+        totalCount: totalCount,
+        avgMinutes: avgMinutes,
+        deepRatio: totalSec > 0 ? (deepSec / totalSec) : 0,
+        focusedRatio: totalSec > 0 ? (focusedSec / totalSec) : 0,
+        shallowRatio: totalSec > 0 ? (shallowSec / totalSec) : 0,
+        deepPct: deepPct,
+        focusedPct: focusedPct,
+        shallowPct: shallowPct,
+        tiers: [
+            {
+                key: "deep",
+                label: "Deep",
+                subLabel: "≥ 50m",
+                seconds: deepSec,
+                hoursText: (deepSec / 3600).toFixed(1) + "h",
+                count: deepCount,
+                percent: deepPct
+            },
+            {
+                key: "focused",
+                label: "Focused",
+                subLabel: "25–50m",
+                seconds: focusedSec,
+                hoursText: (focusedSec / 3600).toFixed(1) + "h",
+                count: focusedCount,
+                percent: focusedPct
+            },
+            {
+                key: "shallow",
+                label: "Shallow",
+                subLabel: "< 25m",
+                seconds: shallowSec,
+                hoursText: (shallowSec / 3600).toFixed(1) + "h",
+                count: shallowCount,
+                percent: shallowPct
+            }
+        ]
     };
 }
 
@@ -415,13 +550,14 @@ function aggregateAppUsage(history, currentAppUsage, scope, selectedTag) {
     if (scope === "current") {
         addUsage(currentAppUsage);
     } else {
+        var matchesScope = makeScopeMatcher(scope);
         for (var i = 0; i < historyList.length; i++) {
             var sess = historyList[i];
             if (!sess) continue;
             if (selectedTag && selectedTag !== "" && sess.tag !== selectedTag) {
                 continue;
             }
-            if (!inScope(sess.timestamp, scope)) continue;
+            if (!matchesScope(sess.timestamp)) continue;
             addUsage(sess.app_usage);
         }
     }
@@ -466,19 +602,6 @@ function blockPresetMinutes(preset) {
     return 25;
 }
 
-function blockPresetName(preset) {
-    if (preset === "ultradian") return "Ultradian";
-    if (preset === "deepWork") return "Deep Work";
-    return "Standard";
-}
-
-function formatHoursMinutesCompact(totalSeconds) {
-    var sec = Math.max(0, Math.floor(totalSeconds || 0));
-    var h = Math.floor(sec / 3600);
-    var m = Math.floor((sec % 3600) / 60);
-    return h + "h " + padZero(m) + "m";
-}
-
 function sessionBlocksCount(durationSeconds, blockMinutes) {
     var dur = Math.max(0, Math.floor(durationSeconds || 0));
     var bMin = blockMinutes || 25;
@@ -497,7 +620,6 @@ function calculateConsistency(history, liveSessionSeconds, config) {
     var blockPreset = cfg.blockPreset || "deepWork";
     var weekendsEnabled = Boolean(cfg.weekendsEnabled);
     var bMin = blockPresetMinutes(blockPreset);
-    var bName = blockPresetName(blockPreset);
     var blockSec = bMin * 60;
 
     var dayMap = {};
@@ -544,27 +666,18 @@ function calculateConsistency(history, liveSessionSeconds, config) {
         ? ("🎯 " + targetBlocks + "× " + bMin + "m")
         : ("🎯 " + tgtHoursClean + "h");
 
-    // Today progress
+    // Today progress ratio (used for Today's tile percentage)
     var todayData = dayMap[todayKey] || { seconds: 0, blocks: 0 };
     var todayProgressRatio = 0;
-    var todayValueStr = "";
-    var todayPercent = 0;
-
     if (goalMode === "blocks") {
         var completedLiveBlocks = sessionBlocksCount(liveSec, bMin);
         var remLiveSec = Math.max(0, liveSec - completedLiveBlocks * blockSec);
         var partialBlock = (liveSec > 0 && remLiveSec > 0) ? Math.min(0.95, remLiveSec / blockSec) : 0;
         var effectiveBlocks = todayData.blocks + partialBlock;
         todayProgressRatio = Math.max(0, Math.min(1, effectiveBlocks / Math.max(1, targetBlocks)));
-        todayPercent = Math.min(100, Math.round((effectiveBlocks / Math.max(1, targetBlocks)) * 100));
-        todayValueStr = todayData.blocks + " / " + targetBlocks + " " + bName;
     } else {
         todayProgressRatio = Math.max(0, Math.min(1, todayData.seconds / Math.max(1, targetSec)));
-        todayPercent = Math.min(100, Math.round((todayData.seconds / Math.max(1, targetSec)) * 100));
-        todayValueStr = formatHoursMinutesCompact(todayData.seconds) + " / " + formatHoursMinutesCompact(targetSec);
     }
-
-    var todayTargetStr = todayPercent + "%";
 
     // Current Week (Mon - Sun)
     var todayDow = (today.getDay() + 6) % 7; // 0 = Mon .. 6 = Sun
@@ -613,7 +726,6 @@ function calculateConsistency(history, liveSessionSeconds, config) {
         weekDays.push({
             dayIndex: w,
             label: DAY_NAMES[w],
-            shortLabel: DAY_NAMES[w],
             dateStr: formatDateReadable(cKey),
             isToday: isToday,
             isFuture: isFuture,
@@ -624,8 +736,7 @@ function calculateConsistency(history, liveSessionSeconds, config) {
             blocks: dEntry.blocks,
             ratio: cellRatio,
             statusText: statusText,
-            bottomText: bottomText,
-            valueText: bottomText
+            bottomText: bottomText
         });
     }
 
@@ -679,14 +790,6 @@ function calculateConsistency(history, liveSessionSeconds, config) {
         blockMinutes: bMin,
         weekendsEnabled: weekendsEnabled,
         badgeText: badgeText,
-        todaySeconds: todayData.seconds,
-        todayBlocks: todayData.blocks,
-        todayMet: isDayMet(todayKey),
-        todayIsRest: !weekendsEnabled && (todayDow >= 5),
-        todayProgressRatio: todayProgressRatio,
-        todayPercent: todayPercent,
-        todayValueStr: todayValueStr,
-        todayTargetStr: todayTargetStr,
         weekDays: weekDays,
         weekMetCount: weekMetCount,
         weekRequiredCount: weekRequiredCount,

@@ -212,9 +212,13 @@ BarWidget {
         onTriggered: {
             if (root.isStudySession) {
                 var app = root.getCurrentActiveApp()
-                var usage = Object.assign({}, root.currentAppUsage)
+                var usage = root.currentAppUsage || ({})
                 usage[app] = (usage[app] || 0) + 1
-                root.currentAppUsage = usage
+                if (root.opened && panelLoader.item && panelLoader.item.currentTab === 2) {
+                    root.currentAppUsage = Object.assign({}, usage)
+                } else {
+                    root.currentAppUsage = usage
+                }
                 root.sessionDuration += 1
             }
 
@@ -259,16 +263,17 @@ BarWidget {
 
     function saveSessionRecord() {
         if (root.sessionDuration <= 0) return
-        var newRecord = {
-            id: "sess_" + Date.now(),
-            tag: root.activeTag || "General",
-            mode: root.activeMode,
-            duration: root.sessionDuration,
-            timestamp: new Date().toISOString(),
-            app_usage: Object.assign({}, root.currentAppUsage)
-        }
+        var records = Model.splitSessionRecords(
+            root.sessionDuration,
+            new Date(),
+            root.activeTag || "General",
+            root.activeMode,
+            root.currentAppUsage
+        )
         var nextHistory = root.history.slice()
-        nextHistory.unshift(newRecord)
+        for (var i = records.length - 1; i >= 0; i--) {
+            nextHistory.unshift(records[i])
+        }
         root.history = nextHistory
 
         root.sessionDuration = 0
@@ -364,6 +369,11 @@ BarWidget {
                 root.sessionDuration = 0
                 root.currentAppUsage = ({})
             }
+            if (root.activeMode === "pomodoro") {
+                if (root.pomodoroPhase === "work") root.remainingSeconds = root.pomodoroWorkDuration
+            } else {
+                root.elapsedSeconds = 0
+            }
         }
         root.activeTag = clean
         if (idx === -1) {
@@ -420,6 +430,11 @@ BarWidget {
             root.activeTag = tags[0]
             root.sessionDuration = 0
             root.currentAppUsage = ({})
+            if (root.activeMode === "pomodoro") {
+                if (root.pomodoroPhase === "work") root.remainingSeconds = root.pomodoroWorkDuration
+            } else {
+                root.elapsedSeconds = 0
+            }
         }
 
         // 3. Remove custom color if present
@@ -452,10 +467,6 @@ BarWidget {
     readonly property string displayTime: {
         var total = (root.activeMode === "pomodoro") ? root.remainingSeconds : root.elapsedSeconds
         return Model.formatSeconds(total)
-    }
-
-    function formattedTime() {
-        return root.displayTime
     }
 
     function notify(title, body) {
