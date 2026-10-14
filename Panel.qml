@@ -104,7 +104,7 @@ Panel {
         ? Model.aggregateTagStats(w.history, "week")
         : { grandTotalHours: "0.0 hrs" }
 
-    readonly property var appUsageData: w
+    readonly property var appUsageData: (w && root.opened && root.currentTab === 2)
         ? Model.aggregateAppUsage(w.history, w.currentAppUsage, root.appScope, root.appTagFilter)
         : { apps: [], totalSeconds: 0, totalFormatted: "0 min", totalHours: "0.0 hrs" }
 
@@ -620,7 +620,11 @@ Panel {
                                                 Repeater {
                                                     model: 4
                                                     Rectangle {
-                                                        readonly property int done: root.w ? root.w.pomodoroCyclesCompleted % 4 : 0
+                                                        readonly property int done: {
+                                                            if (!root.w) return 0
+                                                            if (root.w.pomodoroPhase === "longBreak") return 4
+                                                            return root.w.pomodoroCyclesCompleted % 4
+                                                        }
                                                         width: Style.space(7)
                                                         height: width
                                                         radius: width / 2
@@ -2065,19 +2069,19 @@ Panel {
                         isSyncing = true
                         customHexInput.text = hex
                         isSyncing = false
-                        applyColorToTarget(hex)
+                        applyColorToTarget(hex, true)
                     }
 
-                    function applyColorToTarget(hex) {
+                    function applyColorToTarget(hex, skipSave) {
                         if (root.activeColorTarget === "__new__") {
                             root.newTagColor = hex
                         } else if (root.w && root.activeColorTarget.length > 0) {
-                            root.w.setTagColor(root.activeColorTarget, hex)
+                            root.w.setTagColor(root.activeColorTarget, hex, skipSave)
                         }
                     }
 
                     function selectSwatch(hex) {
-                        applyColorToTarget(hex)
+                        applyColorToTarget(hex, false)
                         syncHsvFromHex(hex)
                     }
 
@@ -2137,7 +2141,10 @@ Panel {
                                     anchors.margins: -Style.space(4)
                                     hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
-                                    onClicked: root.activeColorTarget = ""
+                                    onClicked: {
+                                        if (root.w) root.w.saveToDisk()
+                                        root.activeColorTarget = ""
+                                    }
                                 }
                             }
                         }
@@ -2268,6 +2275,7 @@ Panel {
 
                                     onPressed: function(mouse) { updateVal(mouse) }
                                     onPositionChanged: function(mouse) { if (pressed) updateVal(mouse) }
+                                    onReleased: if (root.w) root.w.saveToDisk()
                                 }
                             }
 
@@ -2345,6 +2353,7 @@ Panel {
 
                                     onPressed: function(mouse) { updateVal(mouse) }
                                     onPositionChanged: function(mouse) { if (pressed) updateVal(mouse) }
+                                    onReleased: if (root.w) root.w.saveToDisk()
                                 }
                             }
 
@@ -2422,6 +2431,7 @@ Panel {
 
                                     onPressed: function(mouse) { updateVal(mouse) }
                                     onPositionChanged: function(mouse) { if (pressed) updateVal(mouse) }
+                                    onReleased: if (root.w) root.w.saveToDisk()
                                 }
                             }
 
@@ -2465,7 +2475,7 @@ Panel {
                                         colorPaletteCard.hueVal = hsv[0]
                                         colorPaletteCard.satVal = hsv[1]
                                         colorPaletteCard.briVal = hsv[2]
-                                        colorPaletteCard.applyColorToTarget(h)
+                                        colorPaletteCard.applyColorToTarget(h, true)
                                         colorPaletteCard.isSyncing = false
                                     }
                                 }
@@ -2487,6 +2497,7 @@ Panel {
                                 }
                                 Keys.onEscapePressed: function(event) {
                                     event.accepted = true
+                                    if (root.w) root.w.saveToDisk()
                                     root.activeColorTarget = ""
                                 }
                             }

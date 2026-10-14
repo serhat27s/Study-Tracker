@@ -89,12 +89,14 @@ BarWidget {
                         })
                         if (!parsed.initialized && !hasReal && parsed.history.length <= 15) {
                             root.history = Model.defaultSampleHistory()
+                            root.storageReady = true
                             root.saveToDisk()
                         } else {
                             root.history = parsed.history
                         }
                     } else {
                         root.history = Model.defaultSampleHistory()
+                        root.storageReady = true
                         root.saveToDisk()
                     }
                     if (parsed && parsed.activeTag && String(parsed.activeTag).trim().length > 0) {
@@ -123,22 +125,23 @@ BarWidget {
                     }
                 } else {
                     root.history = Model.defaultSampleHistory()
+                    root.storageReady = true
                     root.saveToDisk()
                 }
             } catch (e) {
-                root.history = Model.defaultSampleHistory()
-                root.saveToDisk()
+                console.warn("StudyTracker: data.json read error, preserving file:", e)
             }
             root.storageReady = true
         }
         onLoadFailed: {
             root.history = Model.defaultSampleHistory()
-            root.saveToDisk()
             root.storageReady = true
+            root.saveToDisk()
         }
     }
 
     function saveToDisk() {
+        if (!root.storageReady) return
         var payload = {
             initialized: true,
             activeTag: root.activeTag,
@@ -395,7 +398,7 @@ BarWidget {
         root.saveToDisk()
     }
 
-    function setTagColor(tag, colorHex) {
+    function setTagColor(tag, colorHex, skipSave) {
         var clean = String(tag).trim()
         if (clean.length === 0) return
         var next = Object.assign({}, root.tagColors)
@@ -407,7 +410,7 @@ BarWidget {
             delete next[clean]
         }
         root.tagColors = next
-        root.saveToDisk()
+        if (!skipSave) root.saveToDisk()
     }
 
     function removeTag(tag) {
