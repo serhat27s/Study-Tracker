@@ -15,7 +15,7 @@ Panel {
     property var hostWidget: null
     property var rootWidget: null
 
-    // 0: Focus (Timer + Activity Graph), 1: Statistics (Hours per Subject), 2: Activity (Study Session Apps)
+    // 0: Focus (Timer + Activity Graph), 1: Statistics (Consistency, Subject Hours & Session Depth)
     property int currentTab: 0
 
     property bool tagMenuOpen: false
@@ -34,10 +34,8 @@ Panel {
 
     readonly property var colorPalette: Model.TAG_COLORS
 
-    property string tagStatsScope: "week"   // "today" | "week" | "all"
+    property string tagStatsScope: "week"   // "today" | "week" | "month" | "all"
     property string hoveredSubjectTag: ""
-    property string appScope: "today"       // "current" | "today" | "week" | "all"
-    property string appTagFilter: ""        // "" = all subjects
     property var hoveredCell: null
     property int heatmapYear: new Date().getFullYear()
 
@@ -79,17 +77,17 @@ Panel {
         return ""
     }
 
-    readonly property var heatmapData: (w && root.opened && (root.currentTab === 0 || root.currentTab === 1))
+    readonly property var heatmapData: (w && root.opened && root.currentTab === 0)
         ? Model.buildHeatmap(w.history, root.heatmapYear)
-        : { year: root.heatmapYear, weeks: [], numWeeks: 0, todayWeekIndex: 0, totalSeconds: 0, yearHours: "0.0 hrs", todayHours: "0.0 hrs", totalHours: "0.0 hrs", streakDays: 0, sessionCount: 0 }
+        : { year: root.heatmapYear, weeks: [], numWeeks: 0, todayWeekIndex: 0, totalSeconds: 0, yearHours: "0.0 hrs", todayHours: "0.0 hrs", streakDays: 0 }
 
     readonly property var tagStatsData: (w && root.opened && root.currentTab === 1)
         ? Model.aggregateTagStats(w.history, root.tagStatsScope)
-        : { tags: [], grandTotalSeconds: 0, grandTotalFormatted: "0 min", grandTotalHours: "0.0 hrs" }
+        : { tags: [], grandTotalSeconds: 0, grandTotalHours: "0.0 hrs" }
 
     readonly property var sessionQualityData: (w && root.opened && root.currentTab === 1)
         ? Model.calculateSessionQuality(w.history, root.tagStatsScope)
-        : { totalSeconds: 0, totalCount: 0, avgMinutes: 0, deepRatio: 0, focusedRatio: 0, shallowRatio: 0, deepPct: 0, focusedPct: 0, shallowPct: 0, tiers: [] }
+        : { totalSeconds: 0, totalCount: 0, avgMinutes: 0, deepRatio: 0, focusedRatio: 0, shallowRatio: 0, deepPct: 0, tiers: [] }
 
     readonly property var consistencyData: (w && root.opened && root.currentTab === 1)
         ? Model.calculateConsistency(w.history, Math.floor((w.isStudySession ? w.sessionDuration : 0) / 60) * 60, {
@@ -105,10 +103,6 @@ Panel {
             weekDays: [], weekMetCount: 0, weekRequiredCount: 5,
             goalStreak: 0, hitRate30: 0, reqMet30: 0, reqTotal30: 22
         }
-
-    readonly property var appUsageData: (w && root.opened && root.currentTab === 2)
-        ? Model.aggregateAppUsage(w.history, root.appScope === "current" ? w.currentAppUsage : null, root.appScope, root.appTagFilter)
-        : { apps: [], totalSeconds: 0, totalFormatted: "0 min", totalHours: "0.0 hrs" }
 
     function colorForTag(name) {
         if (!name) return Color.accent
@@ -296,47 +290,6 @@ Panel {
         }
     }
 
-    // Kleine Kennzahl-Kachel
-    component StatTile: Rectangle {
-        id: tile
-        property string label: ""
-        property string value: ""
-        property color fg: Color.foreground
-        property color valueColor: fg
-
-        implicitHeight: Style.space(54)
-        radius: Style.space(8)
-        color: Qt.rgba(fg.r, fg.g, fg.b, 0.05)
-
-        Column {
-            anchors.centerIn: parent
-            width: parent.width - Style.space(8)
-            spacing: Style.space(2)
-
-            Text {
-                width: parent.width
-                horizontalAlignment: Text.AlignHCenter
-                elide: Text.ElideRight
-                text: tile.label
-                font.family: Style.font.family
-                font.pixelSize: Style.font.caption
-                font.bold: true
-                font.letterSpacing: 0.5
-                color: Qt.darker(tile.fg, 1.5)
-            }
-            Text {
-                width: parent.width
-                horizontalAlignment: Text.AlignHCenter
-                elide: Text.ElideRight
-                text: tile.value
-                font.family: Style.font.family
-                font.pixelSize: Style.font.heading
-                font.bold: true
-                color: tile.valueColor
-            }
-        }
-    }
-
     // Abschnittsüberschrift
     component SectionLabel: Text {
         property color fg: Color.foreground
@@ -347,59 +300,6 @@ Panel {
         font.bold: true
         font.letterSpacing: 0.6
         color: Qt.darker(fg, 1.5)
-    }
-
-    // Wiederverwendbarer Empty State
-    component EmptyState: Column {
-        id: es
-        property string icon: "󰄨"
-        property string title: ""
-        property string description: ""
-        property color fg: root.fg
-        property color dimColor: root.dim
-
-        spacing: Style.space(8)
-        width: parent ? Math.min(parent.width - Style.space(32), Style.space(280)) : Style.space(260)
-
-        Rectangle {
-            anchors.horizontalCenter: parent.horizontalCenter
-            width: Style.space(46)
-            height: Style.space(46)
-            radius: width / 2
-            color: Qt.rgba(es.fg.r, es.fg.g, es.fg.b, 0.05)
-            border.width: 1
-            border.color: root.hairline
-
-            Text {
-                anchors.centerIn: parent
-                text: es.icon
-                font.family: Style.font.family
-                font.pixelSize: Style.font.iconLarge * 1.25
-                color: es.dimColor
-            }
-        }
-
-        Text {
-            width: parent.width
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.WordWrap
-            text: es.title
-            font.family: Style.font.family
-            font.pixelSize: Style.font.body
-            font.bold: true
-            color: es.fg
-        }
-
-        Text {
-            width: parent.width
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.WordWrap
-            text: es.description
-            font.family: Style.font.family
-            font.pixelSize: Style.font.bodySmall
-            lineHeight: 1.25
-            color: es.dimColor
-        }
     }
 
     component ColorSlider: RowLayout {
@@ -584,12 +484,11 @@ Panel {
             onTabRequested: function(direction) { root.switchPanel(direction) }
             onActivateRequested: if (root.w) root.w.toggleRunning()
             onMoveRequested: function(dx, dy) {
-                if (dx !== 0) root.setTab((root.currentTab + dx + 3) % 3)
+                if (dx !== 0) root.setTab((root.currentTab + dx + 2) % 2)
             }
             onTextKey: function(t) {
                 if (t === "1") root.setTab(0)
                 else if (t === "2") root.setTab(1)
-                else if (t === "3") root.setTab(2)
                 else if ((t === "r" || t === "s") && root.w) root.w.resetTimer()
                 else if (t === "m" && root.w) root.w.setMode(root.isPomodoro ? "tracker" : "pomodoro")
                 else if (t === "t") root.openTagMenu()
@@ -610,8 +509,7 @@ Panel {
                     value: "" + root.currentTab
                     options: [
                         { value: "0", label: "Focus", icon: "󰔛" },
-                        { value: "1", label: "Statistics", icon: "󰄨" },
-                        { value: "2", label: "Activity", icon: "󰍹" }
+                        { value: "1", label: "Statistics", icon: "󰄨" }
                     ]
                     onPicked: function(v) { root.setTab(parseInt(v)) }
                 }
@@ -2149,7 +2047,7 @@ Panel {
                                     Text {
                                         anchors.centerIn: parent
                                         visible: (root.tagStatsData.tags ? root.tagStatsData.tags.length : 0) === 0
-                                        text: root.heatmapData.totalSeconds === 0
+                                        text: (!root.w || root.w.history.length === 0)
                                             ? "No study activity yet"
                                             : "No sessions logged for " + (root.tagStatsScope === "today" ? "Today" : (root.tagStatsScope === "week" ? "the last 7 days" : (root.tagStatsScope === "month" ? "the last 30 days" : "Total")))
                                         font.family: Style.font.family
@@ -2216,26 +2114,31 @@ Panel {
                                     clip: true
 
                                     Row {
+                                        id: depthBarRow
                                         anchors.fill: parent
                                         spacing: Style.space(2)
                                         visible: qualityCard.qData.totalSeconds > 0
+                                        readonly property int activeCount: (qualityCard.qData.deepRatio > 0 ? 1 : 0)
+                                            + (qualityCard.qData.focusedRatio > 0 ? 1 : 0)
+                                            + (qualityCard.qData.shallowRatio > 0 ? 1 : 0)
+                                        readonly property real usableWidth: Math.max(0, width - spacing * Math.max(0, activeCount - 1))
 
                                         Rectangle {
-                                            width: Math.max(0, (parent.width - Style.space(4)) * qualityCard.qData.deepRatio)
+                                            width: depthBarRow.usableWidth * qualityCard.qData.deepRatio
                                             height: parent.height
                                             radius: height / 2
                                             color: qualityCard.deepCol
                                             visible: qualityCard.qData.deepRatio > 0
                                         }
                                         Rectangle {
-                                            width: Math.max(0, (parent.width - Style.space(4)) * qualityCard.qData.focusedRatio)
+                                            width: depthBarRow.usableWidth * qualityCard.qData.focusedRatio
                                             height: parent.height
                                             radius: height / 2
                                             color: qualityCard.focusedCol
                                             visible: qualityCard.qData.focusedRatio > 0
                                         }
                                         Rectangle {
-                                            width: Math.max(0, (parent.width - Style.space(4)) * qualityCard.qData.shallowRatio)
+                                            width: depthBarRow.usableWidth * qualityCard.qData.shallowRatio
                                             height: parent.height
                                             radius: height / 2
                                             color: qualityCard.shallowCol
@@ -2259,11 +2162,11 @@ Panel {
                                             Layout.preferredWidth: 1
                                             Layout.preferredHeight: Style.space(56)
                                             radius: Style.space(8)
-                                            color: isDeep && modelData.seconds > 0
-                                                ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.14)
-                                                : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.04)
-                                            border.width: isDeep && modelData.seconds > 0 ? 1 : 0
-                                            border.color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.45)
+                                            color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.04)
+                                            border.width: isDeep && modelData.seconds > 0 ? 1.5 : 1
+                                            border.color: isDeep && modelData.seconds > 0
+                                                ? Color.accent
+                                                : root.hairline
 
                                             Column {
                                                 anchors.centerIn: parent
@@ -2284,9 +2187,11 @@ Panel {
                                                     Text {
                                                         text: modelData.label + " (" + modelData.subLabel + ")"
                                                         font.family: Style.font.family
-                                                        font.pixelSize: Style.font.caption * 0.88
-                                                        font.bold: isDeep
-                                                        color: isDeep && modelData.seconds > 0 ? Color.accent : root.dim
+                                                        font.pixelSize: Style.font.caption * 0.90
+                                                        font.bold: true
+                                                        color: isDeep && modelData.seconds > 0
+                                                            ? Color.accent
+                                                            : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.85)
                                                     }
                                                 }
 
@@ -2303,8 +2208,8 @@ Panel {
                                                     anchors.horizontalCenter: parent.horizontalCenter
                                                     text: modelData.count + (modelData.count === 1 ? " session" : " sessions")
                                                     font.family: Style.font.family
-                                                    font.pixelSize: Style.font.caption * 0.85
-                                                    color: root.faint
+                                                    font.pixelSize: Style.font.caption * 0.86
+                                                    color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.55)
                                                 }
                                             }
 
@@ -2323,225 +2228,6 @@ Panel {
                                         }
                                     }
                                 }
-                            }
-                        }
-                    }
-
-                    // =========================================================
-                    // =========================================================
-                    // TAB 3: ACTIVITY (Study Session Apps)
-                    // =========================================================
-                    ColumnLayout {
-                        spacing: Style.space(12)
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: Style.space(6)
-
-                            StatTile {
-                                Layout.fillWidth: true
-                                Layout.preferredWidth: 1
-                                fg: root.fg
-                                label: "STATUS"
-                                value: {
-                                    if (!root.running) return "Idle"
-                                    if (root.isPomodoro && root.w && root.w.pomodoroPhase !== "work") return "Break"
-                                    return "Tracking"
-                                }
-                                valueColor: {
-                                    if (!root.running) return root.dim
-                                    if (root.isPomodoro && root.w && root.w.pomodoroPhase !== "work") return root.dim
-                                    return Color.accent
-                                }
-                            }
-                            StatTile {
-                                Layout.fillWidth: true
-                                Layout.preferredWidth: 1
-                                fg: root.fg
-                                label: "SESSION"
-                                value: (root.w && root.w.sessionDuration > 0) ? Model.formatDurationHuman(root.w.sessionDuration) : "0 min"
-                            }
-                            StatTile {
-                                Layout.fillWidth: true
-                                Layout.preferredWidth: 1
-                                fg: root.fg
-                                label: "TOTAL"
-                                value: root.appUsageData.totalFormatted
-                            }
-                        }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-
-                            SectionLabel {
-                                Layout.fillWidth: true
-                                fg: root.fg
-                                text: "STUDY SESSION ACTIVITY"
-                            }
-                            Text {
-                                text: root.appUsageData.apps ? (root.appUsageData.apps.length + (root.appUsageData.apps.length === 1 ? " App" : " Apps")) : "0 Apps"
-                                font.family: Style.font.family
-                                font.pixelSize: Style.font.bodySmall
-                                font.bold: true
-                                color: Color.accent
-                            }
-                        }
-
-                        Segmented {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: Style.space(28)
-                            fg: root.fg
-                            value: root.appScope
-                            options: [
-                                { value: "current", label: "Session" },
-                                { value: "today", label: "Today" },
-                                { value: "week", label: "Week" },
-                                { value: "all", label: "Total" }
-                            ]
-                            onPicked: function(v) { root.appScope = v }
-                        }
-
-                        // Subject Filter: horizontally scrollable, fixed height
-                        ListView {
-                            id: filterList
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: Style.space(26)
-                            orientation: ListView.Horizontal
-                            spacing: Style.space(6)
-                            clip: true
-                            boundsBehavior: Flickable.StopAtBounds
-                            enabled: root.appScope !== "current"
-                            opacity: enabled ? 1 : 0.35
-                            model: [""].concat(root.w ? root.w.recentTags : [])
-
-                            delegate: Rectangle {
-                                readonly property bool sel: root.appTagFilter === modelData
-                                readonly property color chipCol: modelData === "" ? Color.accent : root.colorForTag(modelData)
-                                height: filterList.height
-                                width: chipText.implicitWidth + Style.space(18)
-                                radius: height / 2
-                                color: sel ? Qt.rgba(chipCol.r, chipCol.g, chipCol.b, 0.22)
-                                           : (chipMouse.containsMouse ? root.surfaceHover : root.surface)
-                                border.width: 1
-                                border.color: sel ? chipCol : root.hairline
-
-                                Text {
-                                    id: chipText
-                                    anchors.centerIn: parent
-                                    text: modelData === "" ? "All Subjects" : modelData
-                                    font.family: Style.font.family
-                                    font.pixelSize: Style.font.bodySmall
-                                    font.bold: parent.sel
-                                    color: parent.sel ? root.fg : root.dim
-                                }
-
-                                MouseArea {
-                                    id: chipMouse
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: root.appTagFilter = modelData
-                                }
-                            }
-                        }
-
-                        Item {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-
-                            ListView {
-                                id: appList
-                                anchors.fill: parent
-                                clip: true
-                                spacing: Style.space(10)
-                                boundsBehavior: Flickable.StopAtBounds
-                                model: root.appUsageData.apps
-                                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-
-                                delegate: Column {
-                                    width: appList.width
-                                    spacing: Style.space(4)
-
-                                    RowLayout {
-                                        width: parent.width
-                                        spacing: Style.space(8)
-
-                                        // Initial as app icon
-                                        Rectangle {
-                                            Layout.preferredWidth: Style.space(24)
-                                            Layout.preferredHeight: Style.space(24)
-                                            radius: Style.space(6)
-                                            color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.15)
-
-                                            Text {
-                                                anchors.centerIn: parent
-                                                text: modelData.app.length > 0 ? modelData.app.charAt(0).toUpperCase() : "?"
-                                                font.family: Style.font.family
-                                                font.pixelSize: Style.font.bodySmall
-                                                font.bold: true
-                                                color: Color.accent
-                                            }
-                                        }
-                                        Text {
-                                            Layout.fillWidth: true
-                                            elide: Text.ElideRight
-                                            text: modelData.app
-                                            font.family: Style.font.family
-                                            font.pixelSize: Style.font.body
-                                            font.bold: true
-                                            color: root.fg
-                                        }
-                                        Text {
-                                            text: modelData.formatted
-                                            font.family: Style.font.family
-                                            font.pixelSize: Style.font.bodySmall
-                                            color: root.fg
-                                        }
-                                        Text {
-                                            Layout.preferredWidth: Style.space(38)
-                                            horizontalAlignment: Text.AlignRight
-                                            text: modelData.percent + "%"
-                                            font.family: Style.font.family
-                                            font.pixelSize: Style.font.bodySmall
-                                            color: root.dim
-                                        }
-                                    }
-
-                                    Rectangle {
-                                        x: Style.space(32)
-                                        width: parent.width - Style.space(32)
-                                        height: Style.space(4)
-                                        radius: height / 2
-                                        color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.08)
-
-                                        Rectangle {
-                                            width: Math.max(height, parent.width * modelData.ratio)
-                                            height: parent.height
-                                            radius: height / 2
-                                            color: Color.accent
-                                        }
-                                    }
-                                }
-                            }
-
-                            EmptyState {
-                                anchors.centerIn: parent
-                                visible: appList.count === 0
-                                icon: "󰍹"
-                                title: root.appScope === "current"
-                                    ? (root.isPomodoro && root.w && root.w.pomodoroPhase !== "work"
-                                        ? "Break in Progress"
-                                        : (root.running ? "Tracking Activity…" : "Timer is Idle"))
-                                    : (root.appTagFilter !== "" ? "No Data for \"" + root.appTagFilter + "\"" : "No Activity Data")
-                                description: root.appScope === "current"
-                                    ? (root.isPomodoro && root.w && root.w.pomodoroPhase !== "work"
-                                        ? "App tracking is paused during breaks. Activity is only recorded while studying."
-                                        : (root.running
-                                            ? "Your active application is being recorded for this session."
-                                            : "Start the study timer to track application activity in real time."))
-                                    : (root.appTagFilter !== ""
-                                        ? "No application activity was recorded under this subject during the selected period."
-                                        : "No active application usage recorded in this period. Start studying to log app activity.")
                             }
                         }
                     }

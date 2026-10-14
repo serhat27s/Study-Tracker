@@ -221,7 +221,7 @@ function makeScopeMatcher(scope) {
 }
 
 // Splits a session that crosses local midnight into per-day session records
-function splitSessionRecords(durationSeconds, endDate, tag, mode, appUsage) {
+function splitSessionRecords(durationSeconds, endDate, tag, mode) {
     var dur = Math.max(0, Math.floor(durationSeconds || 0));
     if (dur <= 0) return [];
     var end = (endDate instanceof Date) ? new Date(endDate.getTime()) : new Date(endDate);
@@ -236,22 +236,13 @@ function splitSessionRecords(durationSeconds, endDate, tag, mode, appUsage) {
         var segStartMs = Math.max(startMs, dayStartMs);
         var segSec = Math.round((curEndMs - segStartMs) / 1000);
         if (segSec > 0) {
-            var scaledUsage = {};
-            if (appUsage && typeof appUsage === "object") {
-                var ratio = segSec / dur;
-                for (var app in appUsage) {
-                    var val = Math.round((appUsage[app] || 0) * ratio);
-                    if (val > 0) scaledUsage[app] = val;
-                }
-            }
             var tsDate = (idx === 0) ? new Date(curEndMs) : new Date(curEndMs - 1);
             records.push({
                 id: "sess_" + tsDate.getTime() + (idx > 0 ? "_" + idx : ""),
                 tag: tag || "General",
                 mode: mode || "pomodoro",
                 duration: segSec,
-                timestamp: tsDate.toISOString(),
-                app_usage: scaledUsage
+                timestamp: tsDate.toISOString()
             });
             idx++;
         }
@@ -280,11 +271,8 @@ function aggregateTagStats(history, scope) {
     }
 
     var list = [];
-    var maxSeconds = 0;
     for (var t in tagMap) {
-        var item = tagMap[t];
-        if (item.totalSeconds > maxSeconds) maxSeconds = item.totalSeconds;
-        list.push(item);
+        list.push(tagMap[t]);
     }
     list.sort(function(a, b) { return b.totalSeconds - a.totalSeconds; });
 
@@ -293,13 +281,11 @@ function aggregateTagStats(history, scope) {
         it.formatted = formatDurationHuman(it.totalSeconds);
         it.hoursDec = formatHoursDecimal(it.totalSeconds);
         it.percent = grandTotalSeconds > 0 ? Math.round((it.totalSeconds / grandTotalSeconds) * 100) : 0;
-        it.ratio = maxSeconds > 0 ? (it.totalSeconds / maxSeconds) : 0;
     }
 
     return {
         tags: list,
         grandTotalSeconds: grandTotalSeconds,
-        grandTotalFormatted: formatDurationHuman(grandTotalSeconds),
         grandTotalHours: formatHoursDecimal(grandTotalSeconds)
     };
 }
@@ -352,8 +338,6 @@ function calculateSessionQuality(history, scope) {
         focusedRatio: totalSec > 0 ? (focusedSec / totalSec) : 0,
         shallowRatio: totalSec > 0 ? (shallowSec / totalSec) : 0,
         deepPct: deepPct,
-        focusedPct: focusedPct,
-        shallowPct: shallowPct,
         tiers: [
             {
                 key: "deep",
@@ -519,77 +503,9 @@ function buildHeatmap(history, year) {
         totalSeconds: totalSecondsLogged,
         yearSeconds: yearSecondsLogged,
         todaySeconds: todaySeconds,
-        todayFormatted: formatDurationHuman(todaySeconds),
         todayHours: formatHoursDecimal(todaySeconds),
-        yearFormatted: formatDurationHuman(yearSecondsLogged),
         yearHours: formatHoursDecimal(yearSecondsLogged),
-        totalFormatted: formatDurationHuman(totalSecondsLogged),
-        totalHours: formatHoursDecimal(totalSecondsLogged),
-        streakDays: streak,
-        sessionCount: historyList.length
-    };
-}
-
-// -----------------------------------------------------------------------------
-// Application Usage (Hours per app)
-// -----------------------------------------------------------------------------
-function aggregateAppUsage(history, currentAppUsage, scope, selectedTag) {
-    var historyList = Array.isArray(history) ? history : [];
-    var appTotals = {};
-
-    function addUsage(appUsageMap) {
-        if (!appUsageMap) return;
-        for (var app in appUsageMap) {
-            var val = appUsageMap[app] || 0;
-            if (val > 0) {
-                appTotals[app] = (appTotals[app] || 0) + val;
-            }
-        }
-    }
-
-    if (scope === "current") {
-        addUsage(currentAppUsage);
-    } else {
-        var matchesScope = makeScopeMatcher(scope);
-        for (var i = 0; i < historyList.length; i++) {
-            var sess = historyList[i];
-            if (!sess) continue;
-            if (selectedTag && selectedTag !== "" && sess.tag !== selectedTag) {
-                continue;
-            }
-            if (!matchesScope(sess.timestamp)) continue;
-            addUsage(sess.app_usage);
-        }
-    }
-
-    var appList = [];
-    var grandTotal = 0;
-    var maxSec = 0;
-    for (var appName in appTotals) {
-        var sec = appTotals[appName];
-        grandTotal += sec;
-        if (sec > maxSec) maxSec = sec;
-        appList.push({
-            app: appName,
-            seconds: sec
-        });
-    }
-
-    appList.sort(function(a, b) { return b.seconds - a.seconds; });
-
-    for (var j = 0; j < appList.length; j++) {
-        var it = appList[j];
-        it.formatted = formatDurationHuman(it.seconds);
-        it.hoursDec = formatHoursDecimal(it.seconds);
-        it.percent = grandTotal > 0 ? Math.round((it.seconds / grandTotal) * 100) : 0;
-        it.ratio = maxSec > 0 ? (it.seconds / maxSec) : 0;
-    }
-
-    return {
-        apps: appList,
-        totalSeconds: grandTotal,
-        totalFormatted: formatDurationHuman(grandTotal),
-        totalHours: formatHoursDecimal(grandTotal)
+        streakDays: streak
     };
 }
 
@@ -807,7 +723,6 @@ function defaultSampleHistory() {
     var now = new Date();
     var list = [];
     var tags = ["Math", "Coding", "Physics", "Reading", "Research", "English"];
-    var apps = ["alacritty", "firefox", "code", "obsidian", "terminal"];
 
     // Generate realistic study sessions across the entire year (364 days = 52 weeks)
     for (var d = 364; d >= 0; d--) {
@@ -821,19 +736,13 @@ function defaultSampleHistory() {
             var sessDate = new Date(now.getTime() - d * 86400000 - (c * 2 + 1) * 3600000);
             var tag = tags[(d + c) % tags.length];
             var dur = ((d % 3 === 0 ? 25 : (d % 2 === 0 ? 50 : 30)) + c * 15) * 60;
-            var app1 = apps[(d) % apps.length];
-            var app2 = apps[(d + 1) % apps.length];
-            var appMap = {};
-            appMap[app1] = Math.round(dur * 0.75);
-            appMap[app2] = dur - appMap[app1];
 
             list.push({
                 id: "sample_" + sessDate.getTime() + "_" + c,
                 tag: tag,
                 mode: (dur <= 1800 ? "pomodoro" : "tracker"),
                 duration: dur,
-                timestamp: sessDate.toISOString(),
-                app_usage: appMap
+                timestamp: sessDate.toISOString()
             });
         }
     }

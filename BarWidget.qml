@@ -1,6 +1,5 @@
 import QtQuick
 import Quickshell
-import Quickshell.Hyprland
 import Quickshell.Io
 import qs.Commons
 import qs.Ui
@@ -38,10 +37,7 @@ BarWidget {
     // True when timer is in an active study session (stopwatch or pomodoro work phase)
     readonly property bool isStudySession: (root.activeMode !== "pomodoro" || root.pomodoroPhase === "work")
 
-    // App usage for active session: { [appName]: seconds }
-    property var currentAppUsage: ({})
-
-    // Saved sessions: [ { id, tag, mode, duration, timestamp, app_usage } ]
+    // Saved sessions: [ { id, tag, mode, duration, timestamp } ]
     property var history: []
 
     readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
@@ -187,23 +183,8 @@ BarWidget {
     }
 
     // -------------------------------------------------------------------------
-    // Active Window Tracking & Session Ticker
+    // Session Ticker
     // -------------------------------------------------------------------------
-    function getCurrentActiveApp() {
-        try {
-            if (typeof Hyprland !== "undefined" && Hyprland.activeToplevel) {
-                var top = Hyprland.activeToplevel
-                var ipc = top.lastIpcObject
-                if (ipc && ipc.class && ipc.class.length > 0) return ipc.class
-                if (ipc && ipc.initialClass && ipc.initialClass.length > 0) return ipc.initialClass
-                if (top.title && top.title.length > 0) return top.title
-            }
-        } catch (e) {
-            // fallback
-        }
-        return "Desktop"
-    }
-
     Timer {
         id: sessionTicker
         interval: 1000
@@ -211,14 +192,6 @@ BarWidget {
         running: root.isRunning
         onTriggered: {
             if (root.isStudySession) {
-                var app = root.getCurrentActiveApp()
-                var usage = root.currentAppUsage || ({})
-                usage[app] = (usage[app] || 0) + 1
-                if (root.opened && panelLoader.item && panelLoader.item.currentTab === 2) {
-                    root.currentAppUsage = Object.assign({}, usage)
-                } else {
-                    root.currentAppUsage = usage
-                }
                 root.sessionDuration += 1
             }
 
@@ -267,8 +240,7 @@ BarWidget {
             root.sessionDuration,
             new Date(),
             root.activeTag || "General",
-            root.activeMode,
-            root.currentAppUsage
+            root.activeMode
         )
         var nextHistory = root.history.slice()
         for (var i = records.length - 1; i >= 0; i--) {
@@ -277,7 +249,6 @@ BarWidget {
         root.history = nextHistory
 
         root.sessionDuration = 0
-        root.currentAppUsage = ({})
 
         root.saveToDisk()
     }
@@ -288,7 +259,6 @@ BarWidget {
             root.saveSessionRecord()
         } else {
             root.sessionDuration = 0
-            root.currentAppUsage = ({})
         }
         if (root.activeMode === "pomodoro") {
             root.remainingSeconds = (root.pomodoroPhase === "work") ? root.pomodoroWorkDuration : (root.pomodoroPhase === "shortBreak" ? root.pomodoroShortBreakDuration : root.pomodoroLongBreakDuration)
@@ -307,7 +277,6 @@ BarWidget {
             root.saveSessionRecord()
         } else {
             root.sessionDuration = 0
-            root.currentAppUsage = ({})
         }
         root.isRunning = false
         root.activeMode = mode
@@ -367,7 +336,6 @@ BarWidget {
                 root.saveSessionRecord()
             } else {
                 root.sessionDuration = 0
-                root.currentAppUsage = ({})
             }
             if (root.activeMode === "pomodoro") {
                 if (root.pomodoroPhase === "work") root.remainingSeconds = root.pomodoroWorkDuration
@@ -429,7 +397,6 @@ BarWidget {
         if (String(root.activeTag).trim().toLowerCase() === clean.toLowerCase()) {
             root.activeTag = tags[0]
             root.sessionDuration = 0
-            root.currentAppUsage = ({})
             if (root.activeMode === "pomodoro") {
                 if (root.pomodoroPhase === "work") root.remainingSeconds = root.pomodoroWorkDuration
             } else {

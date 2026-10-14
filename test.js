@@ -24,12 +24,12 @@ assert.strictEqual(Model.hsvToHex(hsv[0], hsv[1], hsv[2]), "#3b82f6");
 assert.strictEqual(Model.tagColor("Math", { Math: "#123456" }), "#123456");
 assert.strictEqual(Model.tagColor("Math", null), "#3b82f6");
 
-// 3. Subject stats & App usage aggregation
+// 3. Subject stats aggregation
 const now = new Date();
 const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 12, 0, 0);
 const history = [
-    { id: "1", tag: "Math", duration: 1800, timestamp: now.toISOString(), app_usage: { code: 1200, firefox: 600 } },
-    { id: "2", tag: "Physics", duration: 3600, timestamp: yesterday.toISOString(), app_usage: { obsidian: 3600 } }
+    { id: "1", tag: "Math", duration: 1800, timestamp: now.toISOString() },
+    { id: "2", tag: "Physics", duration: 3600, timestamp: yesterday.toISOString() }
 ];
 
 const todayStats = Model.aggregateTagStats(history, "today");
@@ -40,16 +40,6 @@ assert.strictEqual(todayStats.tags[0].tag, "Math");
 const weekStats = Model.aggregateTagStats(history, "week");
 assert.strictEqual(weekStats.grandTotalSeconds, 5400);
 assert.strictEqual(weekStats.tags[0].tag, "Physics");
-
-const appCurrent = Model.aggregateAppUsage(history, { alacritty: 300 }, "current", "");
-assert.strictEqual(appCurrent.totalSeconds, 300);
-assert.strictEqual(appCurrent.apps[0].app, "alacritty");
-
-const appMath = Model.aggregateAppUsage(history, null, "all", "Math");
-assert.strictEqual(appMath.totalSeconds, 1800);
-
-const appPhysics = Model.aggregateAppUsage(history, null, "all", "Physics");
-assert.strictEqual(appPhysics.totalSeconds, 3600);
 
 // 4. Heatmap & Streak calculation
 const hm = Model.buildHeatmap(history, now.getFullYear());
@@ -82,11 +72,10 @@ assert.strictEqual(consBlocks.weekDays[todayIdx].blocks, 3); // 2 from 180m + 1 
 
 // 6. Midnight session splitting (22:00 -> 01:00 = 2h day 1 + 1h day 2)
 const afterMidnight = new Date(2026, 9, 14, 1, 0, 0); // 01:00 local time
-const splitRecs = Model.splitSessionRecords(3 * 3600, afterMidnight, "Coding", "tracker", { code: 10800 });
+const splitRecs = Model.splitSessionRecords(3 * 3600, afterMidnight, "Coding", "tracker");
 assert.strictEqual(splitRecs.length, 2);
 assert.strictEqual(splitRecs[0].duration, 3600);  // 00:00..01:00 on Oct 14
 assert.strictEqual(Model.dateKey(new Date(splitRecs[0].timestamp)), "2026-10-14");
-assert.strictEqual(splitRecs[0].app_usage.code, 3600);
 assert.strictEqual(splitRecs[1].duration, 7200);  // 22:00..24:00 on Oct 13 (no 1s loss)
 assert.strictEqual(Model.dateKey(new Date(splitRecs[1].timestamp)), "2026-10-13");
 

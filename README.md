@@ -1,6 +1,6 @@
 # Study Tracker
 
-An Omarchy status bar plugin for tracking study sessions, subjects, and active application usage.
+An Omarchy status bar plugin for tracking study sessions, subjects, consistency goals, and session depth.
 
 ## Features
 
@@ -13,11 +13,10 @@ An Omarchy status bar plugin for tracking study sessions, subjects, and active a
   - Custom subject colors via 14 curated swatches, interactive HSV sliders, `#HEX` input, or random color generation.
 - **Full-Year Activity Heatmap**
   - Horizontally scrollable 52–53 week GitHub-style calendar grid (Jan–Dec) with month navigation, *Today* jump, hover inspection, and daily streak counter.
-- **Subject Statistics**
-  - Interactive donut chart and ranked legend of study hours, session counts, and share per subject across **Today**, **Week** (7 days), and **Total**.
-- **Application Activity Tracking**
-  - Tracks active windows via `Quickshell.Hyprland` (`Hyprland.activeToplevel`) during active study phases (automatically paused during breaks).
-  - Filterable by timeframe (**Session**, **Today**, **Week**, **Total**) and by subject.
+- **Statistics & Consistency**
+  - **Consistency Tracker**: Daily goal tracking by **Hours** (`0.5h–12h`) or **Blocks** (*Ultradian 90m* / *Deep Work 50m* with 2-minute grace), optional Weekend Rest Days (`Mon–Fri` vs `Mon–Sun`), weekly day tiles, **Goal Streak**, and **30d Hit Rate**.
+  - **Hours by Subject**: Interactive donut chart and ranked legend of study hours and share per subject across **Today**, **Week**, **Month**, and **Total**.
+  - **Session Depth & Quality**: Categorizes sessions into **Deep** (`≥ 50m`), **Focused** (`25–50m`), and **Shallow** (`< 25m`) with a stacked distribution bar.
 
 ## Controls & Shortcuts
 
@@ -30,7 +29,7 @@ An Omarchy status bar plugin for tracking study sessions, subjects, and active a
 - `r` / `s`: Reset timer
 - `m`: Toggle between Pomodoro and Stopwatch
 - `t`: Open subject menu
-- `1` / `2` / `3` or `←` / `→`: Switch between *Focus*, *Statistics*, and *Activity* tabs
+- `1` / `2` or `←` / `→`: Switch between *Focus* and *Statistics* tabs
 - `Esc`: Close menu or panel
 
 ## Installation

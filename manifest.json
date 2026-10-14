@@ -5,7 +5,7 @@
   "version": "1.0.0",
   "author": "Your Name",
   "license": "MIT",
-  "description": "Dual-mode study timer with tag logging, activity heatmap, and window tracking.",
+  "description": "Dual-mode study timer with tag logging, activity heatmap, and consistency analytics.",
   "kinds": [
     "bar-widget"
   ],
