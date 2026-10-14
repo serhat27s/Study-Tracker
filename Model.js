@@ -458,6 +458,246 @@ function aggregateAppUsage(history, currentAppUsage, scope, selectedTag) {
 }
 
 // -----------------------------------------------------------------------------
+// Consistency Tracker (Daily Goal: Hours or Blocks, Weekends Off/On, Streak & 30d Hit Rate)
+// -----------------------------------------------------------------------------
+function blockPresetMinutes(preset) {
+    if (preset === "ultradian") return 90;
+    if (preset === "deepWork") return 50;
+    return 25;
+}
+
+function blockPresetName(preset) {
+    if (preset === "ultradian") return "Ultradian";
+    if (preset === "deepWork") return "Deep Work";
+    return "Standard";
+}
+
+function formatHoursMinutesCompact(totalSeconds) {
+    var sec = Math.max(0, Math.floor(totalSeconds || 0));
+    var h = Math.floor(sec / 3600);
+    var m = Math.floor((sec % 3600) / 60);
+    return h + "h " + padZero(m) + "m";
+}
+
+function sessionBlocksCount(durationSeconds, blockMinutes) {
+    var dur = Math.max(0, Math.floor(durationSeconds || 0));
+    var bMin = blockMinutes || 25;
+    var blockSec = bMin * 60;
+    var graceSec = 120; // 2 minutes grace period for stopping slightly before end
+    if (dur < blockSec - graceSec) return 0;
+    return Math.floor((dur + graceSec) / blockSec);
+}
+
+function calculateConsistency(history, liveSessionSeconds, config) {
+    var historyList = Array.isArray(history) ? history : [];
+    var cfg = config || {};
+    var goalMode = cfg.goalMode === "blocks" ? "blocks" : "hours";
+    var targetHours = (typeof cfg.targetHours === "number" && cfg.targetHours >= 0.5) ? cfg.targetHours : 4.0;
+    var targetBlocks = (typeof cfg.targetBlocks === "number" && cfg.targetBlocks >= 1) ? Math.round(cfg.targetBlocks) : 2;
+    var blockPreset = cfg.blockPreset || "deepWork";
+    var weekendsEnabled = Boolean(cfg.weekendsEnabled);
+    var bMin = blockPresetMinutes(blockPreset);
+    var bName = blockPresetName(blockPreset);
+    var blockSec = bMin * 60;
+
+    var dayMap = {};
+    function ensureDay(k) {
+        if (!dayMap[k]) {
+            dayMap[k] = { seconds: 0, blocks: 0 };
+        }
+        return dayMap[k];
+    }
+
+    for (var i = 0; i < historyList.length; i++) {
+        var sess = historyList[i];
+        if (!sess || !sess.duration || !sess.timestamp) continue;
+        var k = dateKey(new Date(sess.timestamp));
+        var dObj = ensureDay(k);
+        dObj.seconds += sess.duration;
+        dObj.blocks += sessionBlocksCount(sess.duration, bMin);
+    }
+
+    var now = new Date();
+    var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var todayKey = dateKey(today);
+
+    var liveSec = Math.max(0, Math.floor(liveSessionSeconds || 0));
+    if (liveSec > 0) {
+        var tObj = ensureDay(todayKey);
+        tObj.seconds += liveSec;
+        tObj.blocks += sessionBlocksCount(liveSec, bMin);
+    }
+
+    var targetSec = Math.round(targetHours * 3600);
+    function isDayMet(k) {
+        var dObj = dayMap[k];
+        if (!dObj) return false;
+        if (goalMode === "blocks") {
+            return dObj.blocks >= targetBlocks;
+        }
+        return dObj.seconds >= targetSec;
+    }
+
+    // Header badge text: e.g. "🎯 4h" or "🎯 2× 50m"
+    var tgtHoursClean = (targetHours % 1 === 0) ? String(targetHours) : targetHours.toFixed(1);
+    var badgeText = goalMode === "blocks"
+        ? ("🎯 " + targetBlocks + "× " + bMin + "m")
+        : ("🎯 " + tgtHoursClean + "h");
+
+    // Today progress
+    var todayData = dayMap[todayKey] || { seconds: 0, blocks: 0 };
+    var todayProgressRatio = 0;
+    var todayValueStr = "";
+    var todayPercent = 0;
+
+    if (goalMode === "blocks") {
+        var completedLiveBlocks = sessionBlocksCount(liveSec, bMin);
+        var remLiveSec = Math.max(0, liveSec - completedLiveBlocks * blockSec);
+        var partialBlock = (liveSec > 0 && remLiveSec > 0) ? Math.min(0.95, remLiveSec / blockSec) : 0;
+        var effectiveBlocks = todayData.blocks + partialBlock;
+        todayProgressRatio = Math.max(0, Math.min(1, effectiveBlocks / Math.max(1, targetBlocks)));
+        todayPercent = Math.min(100, Math.round((effectiveBlocks / Math.max(1, targetBlocks)) * 100));
+        todayValueStr = todayData.blocks + " / " + targetBlocks + " " + bName;
+    } else {
+        todayProgressRatio = Math.max(0, Math.min(1, todayData.seconds / Math.max(1, targetSec)));
+        todayPercent = Math.min(100, Math.round((todayData.seconds / Math.max(1, targetSec)) * 100));
+        todayValueStr = formatHoursMinutesCompact(todayData.seconds) + " / " + formatHoursMinutesCompact(targetSec);
+    }
+
+    var todayTargetStr = todayPercent + "%";
+
+    // Current Week (Mon - Sun)
+    var todayDow = (today.getDay() + 6) % 7; // 0 = Mon .. 6 = Sun
+    var monday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - todayDow);
+    var weekDays = [];
+    var weekMetCount = 0;
+    var weekRequiredCount = weekendsEnabled ? 7 : 5;
+
+    for (var w = 0; w < 7; w++) {
+        var cellDate = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + w);
+        var cKey = dateKey(cellDate);
+        var dEntry = dayMap[cKey] || { seconds: 0, blocks: 0 };
+        var isWeekend = (w >= 5);
+        var isRestDay = !weekendsEnabled && isWeekend;
+        var isFuture = cellDate.getTime() > today.getTime();
+        var isToday = (cKey === todayKey);
+        var met = !isFuture && !isRestDay && isDayMet(cKey);
+
+        if (met) {
+            weekMetCount++;
+        }
+
+        var cellRatio = 0;
+        if (!isFuture) {
+            cellRatio = isToday
+                ? todayProgressRatio
+                : (goalMode === "blocks"
+                    ? Math.min(1, dEntry.blocks / Math.max(1, targetBlocks))
+                    : Math.min(1, dEntry.seconds / Math.max(1, targetSec)));
+        }
+        var cellPct = Math.round(cellRatio * 100);
+
+        var statusText = "—";
+        if (isRestDay) {
+            statusText = "Rest";
+        } else if (met) {
+            statusText = "✓";
+        } else if (!isFuture && (isToday || dEntry.seconds > 0)) {
+            statusText = cellPct + "%";
+        }
+
+        var bottomText = goalMode === "blocks"
+            ? (dEntry.blocks + "/" + targetBlocks)
+            : ((dEntry.seconds / 3600).toFixed(1) + "h");
+
+        weekDays.push({
+            dayIndex: w,
+            label: DAY_NAMES[w],
+            shortLabel: DAY_NAMES[w],
+            dateStr: formatDateReadable(cKey),
+            isToday: isToday,
+            isFuture: isFuture,
+            isWeekend: isWeekend,
+            isRestDay: isRestDay,
+            met: met,
+            seconds: dEntry.seconds,
+            blocks: dEntry.blocks,
+            ratio: cellRatio,
+            statusText: statusText,
+            bottomText: bottomText,
+            valueText: bottomText
+        });
+    }
+
+    // Goal Streak (consecutive required days met; rest days don't break streak)
+    var goalStreak = 0;
+    var checkDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+    for (var step = 0; step < 366; step++) {
+        var kCheck = dateKey(checkDate);
+        var dow = (checkDate.getDay() + 6) % 7;
+        var isRest = !weekendsEnabled && (dow >= 5);
+        var metCheck = isDayMet(kCheck);
+
+        if (isRest) {
+            // Rest day: skip without breaking or incrementing streak
+        } else if (step === 0) {
+            if (metCheck) {
+                goalStreak++;
+            }
+            // If today is not met yet, keep streak alive from yesterday
+        } else {
+            if (metCheck) {
+                goalStreak++;
+            } else {
+                break;
+            }
+        }
+        checkDate.setDate(checkDate.getDate() - 1);
+    }
+
+    // 30-Day Hit Rate (percentage of required days met in the last 30 days)
+    var reqTotal30 = 0;
+    var reqMet30 = 0;
+    for (var d30 = 0; d30 < 30; d30++) {
+        var dt = new Date(today.getFullYear(), today.getMonth(), today.getDate() - d30);
+        var k30 = dateKey(dt);
+        var dow30 = (dt.getDay() + 6) % 7;
+        var isRest30 = !weekendsEnabled && (dow30 >= 5);
+        if (!isRest30) {
+            reqTotal30++;
+            if (isDayMet(k30)) reqMet30++;
+        }
+    }
+    var hitRate30 = reqTotal30 > 0 ? Math.min(100, Math.round((reqMet30 / reqTotal30) * 100)) : 0;
+
+    return {
+        goalMode: goalMode,
+        targetHours: targetHours,
+        targetBlocks: targetBlocks,
+        blockPreset: blockPreset,
+        blockMinutes: bMin,
+        weekendsEnabled: weekendsEnabled,
+        badgeText: badgeText,
+        todaySeconds: todayData.seconds,
+        todayBlocks: todayData.blocks,
+        todayMet: isDayMet(todayKey),
+        todayIsRest: !weekendsEnabled && (todayDow >= 5),
+        todayProgressRatio: todayProgressRatio,
+        todayPercent: todayPercent,
+        todayValueStr: todayValueStr,
+        todayTargetStr: todayTargetStr,
+        weekDays: weekDays,
+        weekMetCount: weekMetCount,
+        weekRequiredCount: weekRequiredCount,
+        goalStreak: goalStreak,
+        hitRate30: hitRate30,
+        reqMet30: reqMet30,
+        reqTotal30: reqTotal30
+    };
+}
+
+// -----------------------------------------------------------------------------
 // Sample history with English default subjects
 // -----------------------------------------------------------------------------
 function defaultSampleHistory() {

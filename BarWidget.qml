@@ -23,6 +23,13 @@ BarWidget {
     property var recentTags: ["Math", "Coding", "Physics", "Reading", "Research"]
     property var tagColors: ({})
 
+    // Consistency Tracker settings
+    property string goalMode: "hours"             // "hours" | "blocks"
+    property real goalTargetHours: 4.0            // 0.5h .. 12.0h (step 0.5)
+    property int goalTargetBlocks: 2              // 1 .. 8
+    property string goalBlockPreset: "deepWork"   // "standard" (25m) | "deepWork" (50m) | "ultradian" (90m)
+    property bool goalWeekendsEnabled: false      // false = Mon-Fri (Sat/Sun Rest/Bonus), true = Mon-Sun
+
     property int remainingSeconds: 1500
     property int elapsedSeconds: 0
     property int sessionDuration: 0        // Seconds of running session
@@ -106,6 +113,16 @@ BarWidget {
                         root.pomodoroLongBreakDuration = Number(parsed.pomodoroLongBreakDuration)
                     if (parsed.pomodoroCyclesTarget && Number(parsed.pomodoroCyclesTarget) > 0)
                         root.pomodoroCyclesTarget = Number(parsed.pomodoroCyclesTarget)
+                    if (parsed.goalMode === "blocks" || parsed.goalMode === "hours")
+                        root.goalMode = parsed.goalMode
+                    if (typeof parsed.goalTargetHours === "number" && parsed.goalTargetHours >= 0.5 && parsed.goalTargetHours <= 12)
+                        root.goalTargetHours = Math.round(parsed.goalTargetHours * 2) / 2
+                    if (typeof parsed.goalTargetBlocks === "number" && parsed.goalTargetBlocks >= 1 && parsed.goalTargetBlocks <= 8)
+                        root.goalTargetBlocks = Math.round(parsed.goalTargetBlocks)
+                    if (parsed.goalBlockPreset === "standard" || parsed.goalBlockPreset === "deepWork" || parsed.goalBlockPreset === "ultradian")
+                        root.goalBlockPreset = parsed.goalBlockPreset
+                    if (typeof parsed.goalWeekendsEnabled === "boolean")
+                        root.goalWeekendsEnabled = parsed.goalWeekendsEnabled
                     if (!root.isRunning && root.activeMode === "pomodoro") {
                         root.remainingSeconds = (root.pomodoroPhase === "work")
                             ? root.pomodoroWorkDuration
@@ -140,9 +157,29 @@ BarWidget {
             pomodoroShortBreakDuration: root.pomodoroShortBreakDuration,
             pomodoroLongBreakDuration: root.pomodoroLongBreakDuration,
             pomodoroCyclesTarget: root.pomodoroCyclesTarget,
+            goalMode: root.goalMode,
+            goalTargetHours: root.goalTargetHours,
+            goalTargetBlocks: root.goalTargetBlocks,
+            goalBlockPreset: root.goalBlockPreset,
+            goalWeekendsEnabled: root.goalWeekendsEnabled,
             lastSaved: new Date().toISOString()
         }
         dataFile.setText(JSON.stringify(payload, null, 2))
+    }
+
+    function setConsistencyConfig(updates) {
+        if (!updates) return
+        if (updates.goalMode === "hours" || updates.goalMode === "blocks")
+            root.goalMode = updates.goalMode
+        if (typeof updates.goalTargetHours === "number")
+            root.goalTargetHours = Math.max(0.5, Math.min(12.0, Math.round(updates.goalTargetHours * 2) / 2))
+        if (typeof updates.goalTargetBlocks === "number")
+            root.goalTargetBlocks = Math.max(1, Math.min(8, Math.round(updates.goalTargetBlocks)))
+        if (updates.goalBlockPreset === "standard" || updates.goalBlockPreset === "deepWork" || updates.goalBlockPreset === "ultradian")
+            root.goalBlockPreset = updates.goalBlockPreset
+        if (typeof updates.goalWeekendsEnabled === "boolean")
+            root.goalWeekendsEnabled = updates.goalWeekendsEnabled
+        root.saveToDisk()
     }
 
     Component.onCompleted: {
@@ -412,9 +449,13 @@ BarWidget {
         root.saveToDisk()
     }
 
-    function formattedTime() {
+    readonly property string displayTime: {
         var total = (root.activeMode === "pomodoro") ? root.remainingSeconds : root.elapsedSeconds
         return Model.formatSeconds(total)
+    }
+
+    function formattedTime() {
+        return root.displayTime
     }
 
     function notify(title, body) {
@@ -454,7 +495,7 @@ BarWidget {
             if (!root.isRunning) {
                 return "\uf19d"
             }
-            return (root.activeMode === "pomodoro" ? "󰄉 " : "󰔛 ") + root.formattedTime() + " · 🏷️ " + root.activeTag
+            return (root.activeMode === "pomodoro" ? "󰄉 " : "󰔛 ") + root.displayTime + " · 🏷️ " + root.activeTag
         }
         tooltipText: "Study Tracker (" + (root.activeMode === "pomodoro" ? (root.pomodoroPhase === "work" ? "Pomodoro" : "Break") : "Stopwatch") + ") — Click: Open panel, Right-click: " + (root.isRunning ? "Pause" : "Start")
         onPressed: function(buttonCode) {

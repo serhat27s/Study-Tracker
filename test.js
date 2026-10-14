@@ -59,4 +59,27 @@ assert.strictEqual(hm.totalSeconds, 5400);
 assert.ok(hm.weeks.length >= 52 && hm.weeks.length <= 54);
 assert.strictEqual(hm.weeks[0].length, 7);
 
+// 5. Consistency Tracker (Hours & Blocks modes, 2m grace period, live session, Weekends & Streak)
+assert.strictEqual(Model.sessionBlocksCount(87 * 60, 90), 0); // 87m < 90m - 2m
+assert.strictEqual(Model.sessionBlocksCount(88 * 60, 90), 1); // 88m >= 90m - 2m (2m grace)
+assert.strictEqual(Model.sessionBlocksCount(180 * 60, 90), 2); // 180m = 2x Ultradian
+
+const consHours = Model.calculateConsistency(history, 1800, {
+    goalMode: "hours",
+    targetHours: 1.0,
+    weekendsEnabled: true
+});
+assert.strictEqual(consHours.todaySeconds, 3600); // 1800 logged + 1800 live
+assert.strictEqual(consHours.todayMet, true);
+assert.strictEqual(consHours.goalStreak, 2); // Today (1h) + Yesterday (1h)
+assert.strictEqual(consHours.weekDays.length, 7);
+
+const consBlocks = Model.calculateConsistency(
+    [{ id: "b1", tag: "Coding", duration: 180 * 60, timestamp: now.toISOString() }],
+    88 * 60,
+    { goalMode: "blocks", targetBlocks: 3, blockPreset: "ultradian", weekendsEnabled: false }
+);
+assert.strictEqual(consBlocks.todayBlocks, 3); // 2 from 180m + 1 from 88m live
+assert.strictEqual(consBlocks.todayMet, true);
+
 console.log("All Model.js tests passed.");

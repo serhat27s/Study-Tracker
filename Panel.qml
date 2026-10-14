@@ -30,10 +30,12 @@ Panel {
     property string newTagColor: ""       // "" (Auto) or custom hex for newly added tag
     property real paletteTargetY: 0
     property bool pomodoroSettingsOpen: false
+    property bool consistencySettingsOpen: false
 
     readonly property var colorPalette: Model.TAG_COLORS
 
     property string tagStatsScope: "week"   // "today" | "week" | "all"
+    property string hoveredSubjectTag: ""
     property string appScope: "today"       // "current" | "today" | "week" | "all"
     property string appTagFilter: ""        // "" = all subjects
     property var hoveredCell: null
@@ -88,6 +90,22 @@ Panel {
     readonly property var weekStats: w
         ? Model.aggregateTagStats(w.history, "week")
         : { grandTotalHours: "0.0 hrs" }
+
+    readonly property var consistencyData: w
+        ? Model.calculateConsistency(w.history, w.isStudySession ? w.sessionDuration : 0, {
+            goalMode: w.goalMode,
+            targetHours: w.goalTargetHours,
+            targetBlocks: w.goalTargetBlocks,
+            blockPreset: w.goalBlockPreset,
+            weekendsEnabled: w.goalWeekendsEnabled
+        })
+        : {
+            goalMode: "hours", targetHours: 4.0, targetBlocks: 2, blockPreset: "deepWork", blockMinutes: 50,
+            weekendsEnabled: false, badgeText: "🎯 4h", todaySeconds: 0, todayBlocks: 0, todayMet: false, todayIsRest: false,
+            todayProgressRatio: 0, todayPercent: 0, todayValueStr: "0h 00m / 4h 00m", todayTargetStr: "0%",
+            weekDays: [], weekMetCount: 0, weekRequiredCount: 5,
+            goalStreak: 0, hitRate30: 0, reqMet30: 0, reqTotal30: 22
+        }
 
     readonly property var appUsageData: (w && root.opened && root.currentTab === 2)
         ? Model.aggregateAppUsage(w.history, root.appScope === "current" ? w.currentAppUsage : null, root.appScope, root.appTagFilter)
@@ -149,6 +167,7 @@ Panel {
     function setTab(i) {
         root.closeTagMenu()
         root.hoveredCell = null
+        root.hoveredSubjectTag = ""
         root.currentTab = i
         if (i === 0) Qt.callLater(root.scrollToCurrent)
     }
@@ -583,7 +602,7 @@ Panel {
                                             Text {
                                                 id: timeText
                                                 anchors.verticalCenter: parent.verticalCenter
-                                                text: root.w ? root.w.formattedTime() : "25:00"
+                                                text: root.w ? root.w.displayTime : "25:00"
                                                 font.family: Style.font.family
                                                 font.pixelSize: Style.font.displayLarge * 1.6
                                                 font.bold: true
@@ -1425,131 +1444,845 @@ Panel {
                             }
                         }
 
-                        RowLayout {
+                        // Hours by Subject Card (Compact Box: Header + Side-by-Side Donut & Subject List)
+                        Rectangle {
+                            id: subjectStatsArea
                             Layout.fillWidth: true
-                            spacing: Style.space(8)
+                            Layout.preferredHeight: Style.space(196)
+                            radius: Style.space(12)
+                            color: root.surface
+                            border.width: 1
+                            border.color: root.hairline
 
-                            SectionLabel {
-                                Layout.fillWidth: true
-                                fg: root.fg
-                                text: "HOURS BY SUBJECT"
+                            readonly property var hoveredItem: {
+                                var list = root.tagStatsData.tags || []
+                                for (var i = 0; i < list.length; i++) {
+                                    if (list[i].tag === root.hoveredSubjectTag) return list[i]
+                                }
+                                return null
                             }
-                            Segmented {
-                                Layout.preferredWidth: Style.space(190)
-                                Layout.preferredHeight: Style.space(28)
-                                fg: root.fg
-                                value: root.tagStatsScope
-                                options: [
-                                    { value: "today", label: "Today" },
-                                    { value: "week", label: "Week" },
-                                    { value: "all", label: "Total" }
-                                ]
-                                onPicked: function(v) { root.tagStatsScope = v }
-                            }
-                        }
 
-                        Item {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-
-                            ListView {
-                                id: tagList
+                            ColumnLayout {
                                 anchors.fill: parent
-                                clip: true
-                                spacing: Style.space(6)
-                                boundsBehavior: Flickable.StopAtBounds
-                                model: root.tagStatsData.tags
-                                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                                anchors.margins: Style.space(12)
+                                spacing: Style.space(10)
 
-                                delegate: Rectangle {
-                                    readonly property color tagCol: root.colorForTag(modelData.tag)
-                                    readonly property bool isActive: modelData.tag === root.activeTag
-                                    width: tagList.width
-                                    height: Style.space(54)
-                                    radius: Style.space(8)
-                                    color: tagRowMouse.containsMouse ? root.surfaceHover : root.surface
-                                    border.width: isActive ? 1 : 0
-                                    border.color: Qt.rgba(tagCol.r, tagCol.g, tagCol.b, 0.5)
+                                // Header: HOURS BY SUBJECT + [ Today | Week | Total ]
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: Style.space(8)
 
-                                    Column {
+                                    SectionLabel {
+                                        Layout.fillWidth: true
+                                        fg: root.fg
+                                        text: "HOURS BY SUBJECT"
+                                    }
+                                    Segmented {
+                                        Layout.preferredWidth: Style.space(180)
+                                        Layout.preferredHeight: Style.space(26)
+                                        fg: root.fg
+                                        value: root.tagStatsScope
+                                        options: [
+                                            { value: "today", label: "Today" },
+                                            { value: "week", label: "Week" },
+                                            { value: "all", label: "Total" }
+                                        ]
+                                        onPicked: function(v) {
+                                            root.hoveredSubjectTag = ""
+                                            root.tagStatsScope = v
+                                        }
+                                    }
+                                }
+
+                                // Side-by-Side Content: Donut Left, Subject Breakdown Right
+                                Item {
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+
+                                    RowLayout {
                                         anchors.fill: parent
-                                        anchors.margins: Style.space(10)
-                                        spacing: Style.space(6)
+                                        spacing: Style.space(14)
+                                        visible: (root.tagStatsData.tags ? root.tagStatsData.tags.length : 0) > 0
 
-                                        RowLayout {
-                                            width: parent.width
-                                            spacing: Style.space(8)
+                                        // Left: Donut Chart
+                                        Item {
+                                            id: donutContainer
+                                            Layout.preferredWidth: Style.space(124)
+                                            Layout.preferredHeight: Style.space(124)
+                                            Layout.alignment: Qt.AlignVCenter
 
-                                            Rectangle {
-                                                width: Style.space(8)
-                                                height: width
-                                                radius: width / 2
-                                                color: tagCol
+                                            Canvas {
+                                                id: donutCanvas
+                                                anchors.fill: parent
+                                                antialiasing: true
+
+                                                readonly property var tagsModel: root.tagStatsData.tags || []
+                                                readonly property int grandTotal: root.tagStatsData.grandTotalSeconds || 0
+                                                readonly property string hoveredTag: root.hoveredSubjectTag
+                                                readonly property var customColors: root.w ? root.w.tagColors : null
+
+                                                onTagsModelChanged: requestPaint()
+                                                onGrandTotalChanged: requestPaint()
+                                                onHoveredTagChanged: requestPaint()
+                                                onCustomColorsChanged: requestPaint()
+                                                onWidthChanged: requestPaint()
+                                                onHeightChanged: requestPaint()
+
+                                                onPaint: {
+                                                    var ctx = getContext("2d")
+                                                    ctx.clearRect(0, 0, width, height)
+
+                                                    var list = tagsModel
+                                                    var total = grandTotal
+                                                    if (!list || list.length === 0 || total <= 0) return
+
+                                                    var cx = width / 2
+                                                    var cy = height / 2
+                                                    var ringW = Style.space(15)
+                                                    var hoverRingW = Style.space(18)
+                                                    var baseRadius = Math.min(cx, cy) - hoverRingW / 2 - Style.space(2)
+
+                                                    var startAngle = -Math.PI / 2
+                                                    var gap = list.length > 1 ? 0.03 : 0
+
+                                                    for (var i = 0; i < list.length; i++) {
+                                                        var item = list[i]
+                                                        var fraction = item.totalSeconds / total
+                                                        var sweep = fraction * Math.PI * 2
+                                                        if (sweep <= 0) continue
+
+                                                        var isHov = (hoveredTag === item.tag)
+                                                        var isDimmed = (hoveredTag !== "" && !isHov)
+                                                        var colHex = String(root.colorForTag(item.tag))
+
+                                                        var actualGap = sweep > gap * 1.5 ? gap : 0
+                                                        var a0 = startAngle + actualGap / 2
+                                                        var a1 = startAngle + sweep - actualGap / 2
+
+                                                        ctx.beginPath()
+                                                        ctx.arc(cx, cy, baseRadius, a0, a1, false)
+                                                        ctx.lineWidth = isHov ? hoverRingW : ringW
+                                                        ctx.strokeStyle = colHex
+                                                        ctx.globalAlpha = isDimmed ? 0.35 : 1.0
+                                                        ctx.stroke()
+
+                                                        startAngle += sweep
+                                                    }
+                                                    ctx.globalAlpha = 1.0
+                                                }
                                             }
-                                            Text {
-                                                Layout.fillWidth: true
-                                                elide: Text.ElideRight
-                                                text: modelData.tag
-                                                font.family: Style.font.family
-                                                font.pixelSize: Style.font.body
-                                                font.bold: true
-                                                color: root.fg
+
+                                            // Center label: Hours on top, Period / Subject below
+                                            Column {
+                                                anchors.centerIn: parent
+                                                width: Style.space(80)
+                                                spacing: Style.space(1)
+
+                                                Text {
+                                                    width: parent.width
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    elide: Text.ElideRight
+                                                    text: subjectStatsArea.hoveredItem
+                                                        ? subjectStatsArea.hoveredItem.hoursDec
+                                                        : root.tagStatsData.grandTotalHours
+                                                    font.family: Style.font.family
+                                                    font.pixelSize: Style.font.body
+                                                    font.bold: true
+                                                    color: root.fg
+                                                }
+
+                                                Text {
+                                                    width: parent.width
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    elide: Text.ElideRight
+                                                    text: subjectStatsArea.hoveredItem
+                                                        ? subjectStatsArea.hoveredItem.tag
+                                                        : (root.tagStatsScope === "today" ? "Today" : (root.tagStatsScope === "week" ? "7 Days" : "Total"))
+                                                    font.family: Style.font.family
+                                                    font.pixelSize: Style.font.caption
+                                                    font.bold: Boolean(subjectStatsArea.hoveredItem)
+                                                    color: subjectStatsArea.hoveredItem
+                                                        ? root.colorForTag(subjectStatsArea.hoveredItem.tag)
+                                                        : root.dim
+                                                }
                                             }
-                                            Text {
-                                                text: modelData.formatted
-                                                font.family: Style.font.family
-                                                font.pixelSize: Style.font.body
-                                                font.bold: true
-                                                color: root.fg
-                                            }
-                                            Text {
-                                                Layout.preferredWidth: Style.space(38)
-                                                horizontalAlignment: Text.AlignRight
-                                                text: modelData.percent + "%"
-                                                font.family: Style.font.family
-                                                font.pixelSize: Style.font.bodySmall
-                                                color: root.dim
+
+                                            MouseArea {
+                                                id: donutMouse
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: root.hoveredSubjectTag !== "" ? Qt.PointingHandCursor : Qt.ArrowCursor
+
+                                                function tagAtPos(mx, my) {
+                                                    var list = root.tagStatsData.tags || []
+                                                    var total = root.tagStatsData.grandTotalSeconds || 0
+                                                    if (!list.length || total <= 0) return ""
+                                                    var cx = width / 2
+                                                    var cy = height / 2
+                                                    var dx = mx - cx
+                                                    var dy = my - cy
+                                                    var dist = Math.sqrt(dx * dx + dy * dy)
+                                                    var ringW = Style.space(18)
+                                                    var baseRadius = Math.min(cx, cy) - ringW / 2 - Style.space(2)
+                                                    if (dist < baseRadius - ringW * 0.75 || dist > baseRadius + ringW * 0.75) {
+                                                        return ""
+                                                    }
+                                                    var angle = Math.atan2(dy, dx) - (-Math.PI / 2)
+                                                    if (angle < 0) angle += Math.PI * 2
+                                                    var targetFrac = angle / (Math.PI * 2)
+                                                    var acc = 0
+                                                    for (var i = 0; i < list.length; i++) {
+                                                        var frac = list[i].totalSeconds / total
+                                                        if (targetFrac >= acc && targetFrac <= acc + frac) {
+                                                            return list[i].tag
+                                                        }
+                                                        acc += frac
+                                                    }
+                                                    return ""
+                                                }
+
+                                                onPositionChanged: function(mouse) {
+                                                    root.hoveredSubjectTag = tagAtPos(mouse.x, mouse.y)
+                                                }
+                                                onExited: root.hoveredSubjectTag = ""
+                                                onClicked: function(mouse) {
+                                                    var t = tagAtPos(mouse.x, mouse.y)
+                                                    if (t !== "" && root.w) root.w.addTag(t)
+                                                }
                                             }
                                         }
 
-                                        Rectangle {
-                                            width: parent.width
-                                            height: Style.space(5)
-                                            radius: height / 2
-                                            color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.08)
+                                        // Right: Subject Breakdown Legend List
+                                        ListView {
+                                            id: tagList
+                                            Layout.fillWidth: true
+                                            Layout.fillHeight: true
+                                            readonly property real contentH: count * Style.space(26) + Math.max(0, count - 1) * spacing
+                                            topMargin: Math.max(0, (height - contentH) / 2)
+                                            clip: true
+                                            spacing: Style.space(3)
+                                            boundsBehavior: Flickable.StopAtBounds
+                                            model: root.tagStatsData.tags
+                                            ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
-                                            Rectangle {
-                                                width: Math.max(height, parent.width * modelData.ratio)
-                                                height: parent.height
-                                                radius: height / 2
-                                                color: tagCol
+                                            delegate: Rectangle {
+                                                readonly property color tagCol: root.colorForTag(modelData.tag)
+                                                readonly property bool isActive: modelData.tag === root.activeTag
+                                                readonly property bool isHov: root.hoveredSubjectTag === modelData.tag
+                                                width: tagList.width
+                                                height: Style.space(26)
+                                                radius: Style.space(6)
+                                                color: (tagRowMouse.containsMouse || isHov)
+                                                    ? root.surfaceHover
+                                                    : (isActive ? Qt.rgba(tagCol.r, tagCol.g, tagCol.b, 0.10) : "transparent")
+                                                border.width: isActive ? 1 : 0
+                                                border.color: Qt.rgba(tagCol.r, tagCol.g, tagCol.b, 0.45)
+
+                                                RowLayout {
+                                                    anchors.fill: parent
+                                                    anchors.leftMargin: Style.space(8)
+                                                    anchors.rightMargin: Style.space(8)
+                                                    spacing: Style.space(8)
+
+                                                    Rectangle {
+                                                        width: Style.space(8)
+                                                        height: width
+                                                        radius: width / 2
+                                                        color: tagCol
+                                                    }
+                                                    Text {
+                                                        Layout.fillWidth: true
+                                                        elide: Text.ElideRight
+                                                        text: modelData.tag
+                                                        font.family: Style.font.family
+                                                        font.pixelSize: Style.font.bodySmall
+                                                        font.bold: isActive || isHov
+                                                        color: root.fg
+                                                    }
+                                                    Text {
+                                                        text: modelData.hoursDec
+                                                        font.family: Style.font.family
+                                                        font.pixelSize: Style.font.bodySmall
+                                                        font.bold: true
+                                                        color: root.fg
+                                                    }
+                                                    Text {
+                                                        Layout.preferredWidth: Style.space(34)
+                                                        horizontalAlignment: Text.AlignRight
+                                                        text: modelData.percent + "%"
+                                                        font.family: Style.font.family
+                                                        font.pixelSize: Style.font.bodySmall
+                                                        color: root.dim
+                                                    }
+                                                }
+
+                                                MouseArea {
+                                                    id: tagRowMouse
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onEntered: root.hoveredSubjectTag = modelData.tag
+                                                    onExited: if (root.hoveredSubjectTag === modelData.tag) root.hoveredSubjectTag = ""
+                                                    onClicked: if (root.w) root.w.addTag(modelData.tag)
+                                                }
+
+                                                PanelToolTip {
+                                                    visible: tagRowMouse.containsMouse
+                                                    text: modelData.sessionCount + " Sessions · " + modelData.formatted + " · Click: set as active subject"
+                                                }
                                             }
                                         }
                                     }
 
-                                    MouseArea {
-                                        id: tagRowMouse
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: if (root.w) root.w.addTag(modelData.tag)
-                                    }
-
-                                    PanelToolTip {
-                                        visible: tagRowMouse.containsMouse
-                                        text: modelData.sessionCount + " Sessions · " + modelData.hoursDec + " · Click: set as active subject"
+                                    Text {
+                                        anchors.centerIn: parent
+                                        visible: (root.tagStatsData.tags ? root.tagStatsData.tags.length : 0) === 0
+                                        text: root.heatmapData.totalSeconds === 0
+                                            ? "No study activity yet"
+                                            : "No sessions logged for " + (root.tagStatsScope === "today" ? "Today" : (root.tagStatsScope === "week" ? "the last 7 days" : "Total"))
+                                        font.family: Style.font.family
+                                        font.pixelSize: Style.font.bodySmall
+                                        color: root.dim
                                     }
                                 }
                             }
+                        }
 
-                            EmptyState {
-                                anchors.centerIn: parent
-                                visible: tagList.count === 0
-                                icon: "󰄨"
-                                title: root.heatmapData.totalSeconds === 0 ? "No Study Activity Yet" : "No Sessions in This Period"
-                                description: root.heatmapData.totalSeconds === 0
-                                    ? "Start a focus timer or stopwatch in the Focus tab to begin tracking subject statistics."
-                                    : "No study sessions were logged during the selected timeframe (" + (root.tagStatsScope === "today" ? "Today" : (root.tagStatsScope === "week" ? "Last 7 Days" : "Total")) + ")."
+                        // =====================================================
+                        // Consistency Tracker Card (Daily Goal: Hours / Blocks)
+                        // =====================================================
+                        Rectangle {
+                            id: consistencyCard
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            radius: Style.space(12)
+                            color: root.surface
+                            border.width: 1
+                            border.color: root.hairline
+
+                            readonly property var cData: root.consistencyData
+                            readonly property bool isBlocks: cData.goalMode === "blocks"
+
+                            ColumnLayout {
+                                anchors.fill: parent
+                                anchors.margins: Style.space(12)
+                                spacing: Style.space(8)
+
+                                // 1. Header: CONSISTENCY TRACKER + [ 🎯 4h/d ] [ ⚙️ ]
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: Style.space(6)
+
+                                    SectionLabel {
+                                        Layout.fillWidth: true
+                                        fg: root.fg
+                                        text: "CONSISTENCY TRACKER"
+                                    }
+
+                                    // Goal summary pill [ 🎯 4h ] (click toggles settings drawer)
+                                    Rectangle {
+                                        height: Style.space(24)
+                                        implicitWidth: goalBadgeText.implicitWidth + Style.space(16)
+                                        radius: Style.space(6)
+                                        color: badgeMouse.containsMouse ? root.surfaceHover : root.surface
+                                        border.width: 1
+                                        border.color: root.consistencySettingsOpen ? Color.accent : root.hairline
+
+                                        Text {
+                                            id: goalBadgeText
+                                            anchors.centerIn: parent
+                                            text: consistencyCard.cData.badgeText
+                                            font.family: Style.font.family
+                                            font.pixelSize: Style.font.caption
+                                            font.bold: true
+                                            color: root.fg
+                                        }
+
+                                        MouseArea {
+                                            id: badgeMouse
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: root.consistencySettingsOpen = !root.consistencySettingsOpen
+                                        }
+
+                                        PanelToolTip {
+                                            visible: badgeMouse.containsMouse
+                                            text: "Click to configure daily goal & weekend rest days"
+                                        }
+                                    }
+
+                                    // Gear button [ ⚙️ ]
+                                    Rectangle {
+                                        Layout.preferredWidth: Style.space(24)
+                                        Layout.preferredHeight: Style.space(24)
+                                        radius: Style.space(6)
+                                        color: root.consistencySettingsOpen
+                                            ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.25)
+                                            : (consGearMouse.containsMouse ? root.surfaceHover : root.surface)
+                                        border.width: 1
+                                        border.color: root.consistencySettingsOpen ? Color.accent : root.hairline
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "󰒓"
+                                            font.family: Style.font.family
+                                            font.pixelSize: Style.font.bodySmall
+                                            color: root.consistencySettingsOpen ? Color.accent : root.fg
+                                        }
+
+                                        MouseArea {
+                                            id: consGearMouse
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: root.consistencySettingsOpen = !root.consistencySettingsOpen
+                                        }
+
+                                        PanelToolTip {
+                                            visible: consGearMouse.containsMouse
+                                            text: "Consistency Goal Settings"
+                                        }
+                                    }
+                                }
+
+                                // Collapsible Goal Settings Drawer (when ⚙️ is clicked)
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    visible: root.consistencySettingsOpen
+                                    implicitHeight: consSettingsCol.implicitHeight + Style.space(14)
+                                    radius: Style.space(8)
+                                    color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.04)
+                                    border.width: 1
+                                    border.color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.35)
+
+                                    ColumnLayout {
+                                        id: consSettingsCol
+                                        anchors.left: parent.left
+                                        anchors.right: parent.right
+                                        anchors.top: parent.top
+                                        anchors.margins: Style.space(7)
+                                        spacing: Style.space(6)
+
+                                        // Row A: Mode [ Hours | Blocks ] + Checkbox [✓] Weekends
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            spacing: Style.space(10)
+
+                                            Segmented {
+                                                Layout.fillWidth: true
+                                                Layout.preferredHeight: Style.space(24)
+                                                fg: root.fg
+                                                value: consistencyCard.cData.goalMode
+                                                options: [
+                                                    { value: "hours", label: "Hours" },
+                                                    { value: "blocks", label: "Blocks" }
+                                                ]
+                                                onPicked: function(v) {
+                                                    if (root.w) root.w.setConsistencyConfig({ goalMode: v })
+                                                }
+                                            }
+
+                                            // Checkbox: [✓] Weekends
+                                            Rectangle {
+                                                height: Style.space(24)
+                                                implicitWidth: wkndChkRow.implicitWidth + Style.space(14)
+                                                radius: Style.space(6)
+                                                color: wkndChkMouse.containsMouse ? root.surfaceHover : "transparent"
+
+                                                Row {
+                                                    id: wkndChkRow
+                                                    anchors.centerIn: parent
+                                                    spacing: Style.space(6)
+
+                                                    Rectangle {
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                        width: Style.space(15)
+                                                        height: Style.space(15)
+                                                        radius: Style.space(4)
+                                                        color: consistencyCard.cData.weekendsEnabled
+                                                            ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.22)
+                                                            : root.surface
+                                                        border.width: 1
+                                                        border.color: consistencyCard.cData.weekendsEnabled ? Color.accent : root.dim
+
+                                                        Text {
+                                                            anchors.centerIn: parent
+                                                            visible: consistencyCard.cData.weekendsEnabled
+                                                            text: "✓"
+                                                            font.family: Style.font.family
+                                                            font.pixelSize: Style.font.caption * 0.9
+                                                            font.bold: true
+                                                            color: Color.accent
+                                                        }
+                                                    }
+
+                                                    Text {
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                        text: "Weekends"
+                                                        font.family: Style.font.family
+                                                        font.pixelSize: Style.font.caption
+                                                        font.bold: true
+                                                        color: consistencyCard.cData.weekendsEnabled ? root.fg : root.dim
+                                                    }
+                                                }
+
+                                                MouseArea {
+                                                    id: wkndChkMouse
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: {
+                                                        if (root.w) root.w.setConsistencyConfig({ goalWeekendsEnabled: !consistencyCard.cData.weekendsEnabled })
+                                                    }
+                                                }
+
+                                                PanelToolTip {
+                                                    visible: wkndChkMouse.containsMouse
+                                                    text: consistencyCard.cData.weekendsEnabled
+                                                        ? "Weekends enabled (Mon–Sun required)"
+                                                        : "Weekends off (Sat & Sun are Rest Days)"
+                                                }
+                                            }
+                                        }
+
+                                        // Row B: Hours -> "Daily Goal" + Stepper | Blocks -> Segmented [Ultradian 90m | Deep Work 50m] + Stepper
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            spacing: Style.space(8)
+
+                                            Text {
+                                                visible: !consistencyCard.isBlocks
+                                                Layout.fillWidth: true
+                                                text: "Daily Goal"
+                                                font.family: Style.font.family
+                                                font.pixelSize: Style.font.caption
+                                                font.bold: true
+                                                color: root.dim
+                                            }
+
+                                            Segmented {
+                                                visible: consistencyCard.isBlocks
+                                                Layout.fillWidth: true
+                                                Layout.preferredHeight: Style.space(24)
+                                                fg: root.fg
+                                                value: consistencyCard.cData.blockPreset
+                                                options: [
+                                                    { value: "ultradian", label: "Ultradian 90m", tip: "Ultradian Block (90m, 2m grace)" },
+                                                    { value: "deepWork", label: "Deep Work 50m", tip: "Deep Work Block (50m, 2m grace)" }
+                                                ]
+                                                onPicked: function(v) {
+                                                    if (root.w) root.w.setConsistencyConfig({ goalBlockPreset: v })
+                                                }
+                                            }
+
+                                            Row {
+                                                spacing: Style.space(4)
+
+                                                Rectangle {
+                                                    width: Style.space(24)
+                                                    height: Style.space(24)
+                                                    radius: Style.space(5)
+                                                    color: goalMinusMouse.containsMouse ? root.surfaceHover : root.surface
+                                                    border.width: 1
+                                                    border.color: root.hairline
+
+                                                    Text {
+                                                        anchors.centerIn: parent
+                                                        text: "−"
+                                                        font.family: Style.font.family
+                                                        font.pixelSize: Style.font.bodySmall
+                                                        font.bold: true
+                                                        color: root.fg
+                                                    }
+
+                                                    MouseArea {
+                                                        id: goalMinusMouse
+                                                        anchors.fill: parent
+                                                        hoverEnabled: true
+                                                        cursorShape: Qt.PointingHandCursor
+                                                        onClicked: {
+                                                            if (!root.w) return
+                                                            if (consistencyCard.isBlocks) {
+                                                                root.w.setConsistencyConfig({ goalTargetBlocks: consistencyCard.cData.targetBlocks - 1 })
+                                                            } else {
+                                                                root.w.setConsistencyConfig({ goalTargetHours: consistencyCard.cData.targetHours - 0.5 })
+                                                            }
+                                                        }
+                                                    }
+                                                }
+
+                                                Rectangle {
+                                                    width: Style.space(consistencyCard.isBlocks ? 40 : 54)
+                                                    height: Style.space(24)
+                                                    radius: Style.space(5)
+                                                    color: root.surface
+                                                    border.width: 1
+                                                    border.color: root.hairline
+
+                                                    Text {
+                                                        anchors.centerIn: parent
+                                                        text: consistencyCard.isBlocks
+                                                            ? (consistencyCard.cData.targetBlocks + "x")
+                                                            : (consistencyCard.cData.targetHours.toFixed(1) + "h")
+                                                        font.family: Style.font.family
+                                                        font.pixelSize: Style.font.bodySmall
+                                                        font.bold: true
+                                                        color: Color.accent
+                                                    }
+                                                }
+
+                                                Rectangle {
+                                                    width: Style.space(24)
+                                                    height: Style.space(24)
+                                                    radius: Style.space(5)
+                                                    color: goalPlusMouse.containsMouse ? root.surfaceHover : root.surface
+                                                    border.width: 1
+                                                    border.color: root.hairline
+
+                                                    Text {
+                                                        anchors.centerIn: parent
+                                                        text: "+"
+                                                        font.family: Style.font.family
+                                                        font.pixelSize: Style.font.bodySmall
+                                                        font.bold: true
+                                                        color: root.fg
+                                                    }
+
+                                                    MouseArea {
+                                                        id: goalPlusMouse
+                                                        anchors.fill: parent
+                                                        hoverEnabled: true
+                                                        cursorShape: Qt.PointingHandCursor
+                                                        onClicked: {
+                                                            if (!root.w) return
+                                                            if (consistencyCard.isBlocks) {
+                                                                root.w.setConsistencyConfig({ goalTargetBlocks: consistencyCard.cData.targetBlocks + 1 })
+                                                            } else {
+                                                                root.w.setConsistencyConfig({ goalTargetHours: consistencyCard.cData.targetHours + 0.5 })
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // 2. Today's Progress: 2h 45m / 4h 00m (or 2 / 2 Ultradian)         69%
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: Style.space(5)
+
+                                    RowLayout {
+                                        Layout.fillWidth: true
+
+                                        Text {
+                                            text: "Today's Progress: "
+                                            font.family: Style.font.family
+                                            font.pixelSize: Style.font.bodySmall
+                                            color: root.dim
+                                        }
+
+                                        Text {
+                                            text: consistencyCard.cData.todayValueStr
+                                            font.family: Style.font.family
+                                            font.pixelSize: Style.font.bodySmall
+                                            font.bold: true
+                                            color: root.fg
+                                        }
+
+                                        Item { Layout.fillWidth: true }
+
+                                        Text {
+                                            text: consistencyCard.cData.todayPercent + "%"
+                                            font.family: Style.font.family
+                                            font.pixelSize: Style.font.bodySmall
+                                            font.bold: true
+                                            color: consistencyCard.cData.todayMet ? Color.accent : root.fg
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        height: Style.space(7)
+                                        radius: height / 2
+                                        color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.08)
+
+                                        Rectangle {
+                                            width: parent.width * consistencyCard.cData.todayProgressRatio
+                                            height: parent.height
+                                            radius: height / 2
+                                            color: Color.accent
+                                            Behavior on width { NumberAnimation { duration: 220 } }
+                                        }
+                                    }
+                                }
+
+                                // 3. THIS WEEK (Mon–Sun) + 4 / 5 Days ✓ + 7 Day Tiles
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    spacing: Style.space(6)
+
+                                    RowLayout {
+                                        Layout.fillWidth: true
+
+                                        Text {
+                                            text: "THIS WEEK (Mon–Sun)"
+                                            font.family: Style.font.family
+                                            font.pixelSize: Style.font.caption
+                                            font.bold: true
+                                            font.letterSpacing: 0.4
+                                            color: root.dim
+                                        }
+
+                                        Item { Layout.fillWidth: true }
+
+                                        Text {
+                                            text: consistencyCard.cData.weekMetCount + " / " + consistencyCard.cData.weekRequiredCount + " Days ✓"
+                                            font.family: Style.font.family
+                                            font.pixelSize: Style.font.caption
+                                            font.bold: true
+                                            color: consistencyCard.cData.weekMetCount >= consistencyCard.cData.weekRequiredCount ? Color.accent : root.fg
+                                        }
+                                    }
+
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        Layout.fillHeight: true
+                                        spacing: Style.space(5)
+
+                                        Repeater {
+                                            model: consistencyCard.cData.weekDays
+
+                                            Rectangle {
+                                                id: dayTile
+                                                Layout.fillWidth: true
+                                                Layout.preferredWidth: 1
+                                                Layout.fillHeight: true
+                                                Layout.minimumHeight: Style.space(52)
+                                                Layout.maximumHeight: Style.space(62)
+                                                radius: Style.space(7)
+                                                color: {
+                                                    if (modelData.met) return Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.22)
+                                                    if (modelData.isRestDay) return Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.02)
+                                                    return Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.04)
+                                                }
+                                                border.width: modelData.isToday ? 2 : (modelData.met ? 1.5 : 0)
+                                                border.color: modelData.met
+                                                    ? Color.accent
+                                                    : (modelData.isToday ? Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.85) : "transparent")
+
+                                                // Dashed border for Rest Days (┌ ─ ─ ┐)
+                                                Canvas {
+                                                    anchors.fill: parent
+                                                    visible: modelData.isRestDay && !modelData.isToday && !modelData.met
+                                                    onWidthChanged: requestPaint()
+                                                    onHeightChanged: requestPaint()
+                                                    onPaint: {
+                                                        var ctx = getContext("2d")
+                                                        ctx.clearRect(0, 0, width, height)
+                                                        ctx.strokeStyle = Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.22)
+                                                        ctx.lineWidth = 1
+                                                        if (ctx.setLineDash) ctx.setLineDash([4, 3])
+                                                        var r = Style.space(7)
+                                                        var x = 0.5, y = 0.5, w = width - 1, h = height - 1
+                                                        ctx.beginPath()
+                                                        ctx.moveTo(x + r, y)
+                                                        ctx.lineTo(x + w - r, y)
+                                                        ctx.quadraticCurveTo(x + w, y, x + w, y + r)
+                                                        ctx.lineTo(x + w, y + h - r)
+                                                        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h)
+                                                        ctx.lineTo(x + r, y + h)
+                                                        ctx.quadraticCurveTo(x, y + h, x, y + h - r)
+                                                        ctx.lineTo(x, y + r)
+                                                        ctx.quadraticCurveTo(x, y, x + r, y)
+                                                        ctx.closePath()
+                                                        ctx.stroke()
+                                                    }
+                                                }
+
+                                                Column {
+                                                    anchors.centerIn: parent
+                                                    spacing: Style.space(1)
+
+                                                    // Line 1: Day Name (Mon, Tue, Wed...)
+                                                    Text {
+                                                        anchors.horizontalCenter: parent.horizontalCenter
+                                                        text: modelData.label
+                                                        font.family: Style.font.family
+                                                        font.pixelSize: Style.font.caption * 0.92
+                                                        font.bold: modelData.isToday || modelData.met
+                                                        color: modelData.met
+                                                            ? Color.accent
+                                                            : (modelData.isToday ? root.fg : (modelData.isRestDay ? root.faint : root.dim))
+                                                    }
+
+                                                    // Line 2: Status (✓, 69%, —, Rest)
+                                                    Text {
+                                                        anchors.horizontalCenter: parent.horizontalCenter
+                                                        text: modelData.statusText
+                                                        font.family: Style.font.family
+                                                        font.pixelSize: Style.font.caption
+                                                        font.bold: modelData.met || modelData.isToday
+                                                        color: modelData.met
+                                                            ? Color.accent
+                                                            : (modelData.isToday ? root.fg : (modelData.isRestDay ? root.faint : root.dim))
+                                                    }
+
+                                                    // Line 3: Hours or Blocks (4.2h, 0.0h, 2/2) — hidden on Rest Days
+                                                    Text {
+                                                        visible: !modelData.isRestDay
+                                                        anchors.horizontalCenter: parent.horizontalCenter
+                                                        text: modelData.bottomText
+                                                        font.family: Style.font.family
+                                                        font.pixelSize: Style.font.caption * 0.88
+                                                        font.bold: modelData.met
+                                                        color: modelData.met ? Color.accent : (modelData.isToday ? root.dim : root.faint)
+                                                    }
+                                                }
+
+                                                MouseArea {
+                                                    id: wkTileMouse
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                }
+
+                                                PanelToolTip {
+                                                    visible: wkTileMouse.containsMouse
+                                                    text: modelData.dateStr + " · " + Model.formatDurationHuman(modelData.seconds)
+                                                        + (consistencyCard.isBlocks ? (" (" + modelData.blocks + " Blocks)") : "")
+                                                        + (modelData.isRestDay ? " · Rest Day" : "")
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // 4. Footer Line: 🔥 Goal Streak: 6 Days        📊 30d Hit Rate: 82% (18/22)
+                                RowLayout {
+                                    Layout.fillWidth: true
+
+                                    Text {
+                                        text: "🔥 Goal Streak: " + consistencyCard.cData.goalStreak
+                                            + (consistencyCard.cData.goalStreak === 1 ? " Day" : " Days")
+                                        font.family: Style.font.family
+                                        font.pixelSize: Style.font.caption
+                                        font.bold: true
+                                        color: consistencyCard.cData.goalStreak > 0 ? root.fg : root.dim
+                                    }
+
+                                    Item { Layout.fillWidth: true }
+
+                                    Text {
+                                        text: "📊 30d Hit Rate: " + consistencyCard.cData.hitRate30 + "% (" + consistencyCard.cData.reqMet30 + "/" + consistencyCard.cData.reqTotal30 + ")"
+                                        font.family: Style.font.family
+                                        font.pixelSize: Style.font.caption
+                                        font.bold: true
+                                        color: consistencyCard.cData.hitRate30 >= 80 ? Color.accent : root.fg
+                                    }
+                                }
                             }
                         }
                     }
