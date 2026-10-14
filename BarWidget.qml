@@ -28,9 +28,6 @@ BarWidget {
     property int sessionDuration: 0        // Seconds of running session
     property bool isRunning: false
 
-    // System uptime in seconds
-    property int systemUptimeSeconds: 0
-
     // True when timer is in an active study session (stopwatch or pomodoro work phase)
     readonly property bool isStudySession: (root.activeMode !== "pomodoro" || root.pomodoroPhase === "work")
 
@@ -84,16 +81,7 @@ BarWidget {
                 if (content && content.length > 0) {
                     var parsed = JSON.parse(content)
                     if (parsed && Array.isArray(parsed.history)) {
-                        var hasReal = parsed.history.some(function(s) {
-                            return s.id && String(s.id).indexOf("sess_") === 0
-                        })
-                        if (!parsed.initialized && !hasReal && parsed.history.length <= 15) {
-                            root.history = Model.defaultSampleHistory()
-                            root.storageReady = true
-                            root.saveToDisk()
-                        } else {
-                            root.history = parsed.history
-                        }
+                        root.history = parsed.history
                     } else {
                         root.history = Model.defaultSampleHistory()
                         root.storageReady = true
@@ -128,10 +116,10 @@ BarWidget {
                     root.storageReady = true
                     root.saveToDisk()
                 }
+                root.storageReady = true
             } catch (e) {
                 console.warn("StudyTracker: data.json read error, preserving file:", e)
             }
-            root.storageReady = true
         }
         onLoadFailed: {
             root.history = Model.defaultSampleHistory()
@@ -157,32 +145,8 @@ BarWidget {
         dataFile.setText(JSON.stringify(payload, null, 2))
     }
 
-    // -------------------------------------------------------------------------
-    // System Uptime Tracking
-    // -------------------------------------------------------------------------
-    Process {
-        id: uptimeProc
-        command: ["sh", "-c", "cut -d' ' -f1 /proc/uptime"]
-        stdout: StdioCollector {
-            id: uptimeCollector
-            waitForEnd: true
-            onStreamFinished: {
-                var raw = uptimeCollector.text.trim()
-                var sec = parseFloat(raw)
-                if (!isNaN(sec)) {
-                    root.systemUptimeSeconds = Math.floor(sec)
-                }
-            }
-        }
-    }
-
-    function refreshUptime() {
-        if (!uptimeProc.running) uptimeProc.running = true
-    }
-
     Component.onCompleted: {
         ensureDir.running = true
-        root.refreshUptime()
     }
 
     // -------------------------------------------------------------------------
@@ -207,31 +171,25 @@ BarWidget {
         id: sessionTicker
         interval: 1000
         repeat: true
-        running: true
+        running: root.isRunning
         onTriggered: {
-            if (root.systemUptimeSeconds > 0) {
-                root.systemUptimeSeconds += 1
+            if (root.isStudySession) {
+                var app = root.getCurrentActiveApp()
+                var usage = Object.assign({}, root.currentAppUsage)
+                usage[app] = (usage[app] || 0) + 1
+                root.currentAppUsage = usage
+                root.sessionDuration += 1
             }
 
-            if (root.isRunning) {
-                if (root.isStudySession) {
-                    var app = root.getCurrentActiveApp()
-                    var usage = Object.assign({}, root.currentAppUsage)
-                    usage[app] = (usage[app] || 0) + 1
-                    root.currentAppUsage = usage
-                    root.sessionDuration += 1
+            if (root.activeMode === "pomodoro") {
+                if (root.remainingSeconds > 0) {
+                    root.remainingSeconds -= 1
                 }
-
-                if (root.activeMode === "pomodoro") {
-                    if (root.remainingSeconds > 0) {
-                        root.remainingSeconds -= 1
-                    }
-                    if (root.remainingSeconds <= 0) {
-                        root.handlePomodoroFinished()
-                    }
-                } else {
-                    root.elapsedSeconds += 1
+                if (root.remainingSeconds <= 0) {
+                    root.handlePomodoroFinished()
                 }
+            } else {
+                root.elapsedSeconds += 1
             }
         }
     }
@@ -282,10 +240,6 @@ BarWidget {
         root.saveToDisk()
     }
 
-    function finishAndSave() {
-        root.resetTimer()
-    }
-
     function resetTimer() {
         root.isRunning = false
         if (root.sessionDuration >= 60 && root.isStudySession) {
@@ -320,23 +274,6 @@ BarWidget {
         } else {
             root.elapsedSeconds = 0
         }
-    }
-
-    function setPomodoroPhase(phase) {
-        if (root.sessionDuration >= 60 && root.isStudySession) {
-            root.saveSessionRecord()
-        } else {
-            root.sessionDuration = 0
-            root.currentAppUsage = ({})
-        }
-        root.isRunning = false
-        if (phase === "longBreak" && root.pomodoroLongBreakDuration <= 0) {
-            phase = "shortBreak"
-        }
-        root.pomodoroPhase = phase
-        if (phase === "work") root.remainingSeconds = root.pomodoroWorkDuration
-        else if (phase === "shortBreak") root.remainingSeconds = root.pomodoroShortBreakDuration
-        else if (phase === "longBreak") root.remainingSeconds = root.pomodoroLongBreakDuration
     }
 
     function setPomodoroDuration(phase, seconds) {
@@ -379,16 +316,25 @@ BarWidget {
     function addTag(tag, customColor) {
         var clean = String(tag).trim()
         if (clean.length === 0) return
-        root.activeTag = clean
+        var hasColor = Boolean(customColor && String(customColor).trim().length > 0)
         var tags = root.recentTags.slice()
         var idx = tags.indexOf(clean)
-        if (idx !== -1) {
-            tags.splice(idx, 1)
+        if (root.activeTag === clean && idx !== -1 && !hasColor) return
+        if (root.activeTag !== clean) {
+            if (root.sessionDuration >= 60 && root.isStudySession) {
+                root.saveSessionRecord()
+            } else {
+                root.sessionDuration = 0
+                root.currentAppUsage = ({})
+            }
         }
-        tags.unshift(clean)
-        if (tags.length > 20) tags = tags.slice(0, 20)
-        root.recentTags = tags
-        if (customColor && String(customColor).trim().length > 0) {
+        root.activeTag = clean
+        if (idx === -1) {
+            tags.unshift(clean)
+            if (tags.length > 20) tags = tags.slice(0, 20)
+            root.recentTags = tags
+        }
+        if (hasColor) {
             var c = String(customColor).trim()
             if (c.indexOf("#") !== 0) c = "#" + c
             var nextColors = Object.assign({}, root.tagColors)
@@ -435,10 +381,8 @@ BarWidget {
         // 2. If activeTag is this tag, switch to first remaining tag
         if (String(root.activeTag).trim().toLowerCase() === clean.toLowerCase()) {
             root.activeTag = tags[0]
-            if (!root.isRunning) {
-                root.sessionDuration = 0
-                root.currentAppUsage = ({})
-            }
+            root.sessionDuration = 0
+            root.currentAppUsage = ({})
         }
 
         // 3. Remove custom color if present

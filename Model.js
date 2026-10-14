@@ -40,18 +40,6 @@ function formatHoursDecimal(total) {
     return h + (h === "1.0" ? " hr" : " hrs");
 }
 
-function formatUptime(totalSec) {
-    if (!totalSec || totalSec <= 0) return "0 min";
-    var days = Math.floor(totalSec / 86400);
-    var hrs = Math.floor((totalSec % 86400) / 3600);
-    var mins = Math.floor((totalSec % 3600) / 60);
-    var parts = [];
-    if (days > 0) parts.push(days + (days === 1 ? " day" : " days"));
-    if (hrs > 0) parts.push(hrs + (hrs === 1 ? " hr" : " hrs"));
-    if (mins > 0 || parts.length === 0) parts.push(mins + " min");
-    return parts.join(", ");
-}
-
 var TAG_COLORS = [
     "#3b82f6", // Blue
     "#10b981", // Emerald
@@ -413,7 +401,6 @@ function buildHeatmap(history, year) {
 function aggregateAppUsage(history, currentAppUsage, scope, selectedTag) {
     var historyList = Array.isArray(history) ? history : [];
     var appTotals = {};
-    var todayDk = dateKey(new Date());
 
     function addUsage(appUsageMap) {
         if (!appUsageMap) return;
@@ -436,9 +423,6 @@ function aggregateAppUsage(history, currentAppUsage, scope, selectedTag) {
             }
             if (!inScope(sess.timestamp, scope)) continue;
             addUsage(sess.app_usage);
-        }
-        if (!selectedTag || selectedTag === "") {
-            addUsage(currentAppUsage);
         }
     }
 
