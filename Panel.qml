@@ -54,6 +54,17 @@ Panel {
     readonly property bool running: w ? w.isRunning : false
     readonly property bool isPomodoro: w ? w.activeMode === "pomodoro" : true
     readonly property string activeTag: w ? w.activeTag : "General"
+    readonly property var listedTags: w ? w.recentTags : []
+
+    function isTagListed(name) {
+        var clean = String(name || "").trim().toLowerCase()
+        if (clean.length === 0) return false
+        var tags = root.listedTags || []
+        for (var i = 0; i < tags.length; i++) {
+            if (String(tags[i]).trim().toLowerCase() === clean) return true
+        }
+        return false
+    }
 
     readonly property int phaseTotal: {
         if (!w) return 1500
@@ -1911,6 +1922,7 @@ Panel {
                                                     font.family: Style.font.family
                                                     font.pixelSize: Style.font.caption
                                                     font.bold: Boolean(subjectStatsArea.hoveredItem)
+                                                    font.strikeout: Boolean(subjectStatsArea.hoveredItem && (root.listedTags, !root.isTagListed(subjectStatsArea.hoveredItem.tag)))
                                                     color: subjectStatsArea.hoveredItem
                                                         ? root.colorForTag(subjectStatsArea.hoveredItem.tag)
                                                         : root.dim
@@ -1957,7 +1969,9 @@ Panel {
                                                 onExited: root.hoveredSubjectTag = ""
                                                 onClicked: function(mouse) {
                                                     var t = tagAtPos(mouse.x, mouse.y)
-                                                    if (t !== "" && root.w) root.w.addTag(t)
+                                                    if (t === "" || !root.w) return
+                                                    if (root.isTagListed(t)) root.w.addTag(t)
+                                                    else root.w.recoverTag(t)
                                                 }
                                             }
                                         }
@@ -1979,6 +1993,7 @@ Panel {
                                                 readonly property color tagCol: root.colorForTag(modelData.tag)
                                                 readonly property bool isActive: modelData.tag === root.activeTag
                                                 readonly property bool isHov: root.hoveredSubjectTag === modelData.tag
+                                                readonly property bool isListed: (root.listedTags, root.isTagListed(modelData.tag))
                                                 width: tagList.width
                                                 height: Style.space(28)
                                                 radius: Style.space(6)
@@ -2007,7 +2022,8 @@ Panel {
                                                         font.family: Style.font.family
                                                         font.pixelSize: Style.font.bodySmall
                                                         font.bold: isActive || isHov
-                                                        color: root.fg
+                                                        font.strikeout: !isListed
+                                                        color: isListed ? root.fg : root.dim
                                                     }
                                                     Text {
                                                         text: modelData.hoursDec
@@ -2033,12 +2049,17 @@ Panel {
                                                     cursorShape: Qt.PointingHandCursor
                                                     onEntered: root.hoveredSubjectTag = modelData.tag
                                                     onExited: if (root.hoveredSubjectTag === modelData.tag) root.hoveredSubjectTag = ""
-                                                    onClicked: if (root.w) root.w.addTag(modelData.tag)
+                                                    onClicked: {
+                                                        if (!root.w) return
+                                                        if (isListed) root.w.addTag(modelData.tag)
+                                                        else root.w.recoverTag(modelData.tag)
+                                                    }
                                                 }
 
                                                 PanelToolTip {
                                                     visible: tagRowMouse.containsMouse
-                                                    text: modelData.sessionCount + " Sessions · " + modelData.formatted + " · Click: set as active subject"
+                                                    text: modelData.sessionCount + " Sessions · " + modelData.formatted
+                                                        + (isListed ? " · Click: set as active subject" : " · Click: recover archived subject")
                                                 }
                                             }
                                         }
@@ -2189,9 +2210,7 @@ Panel {
                                                         font.family: Style.font.family
                                                         font.pixelSize: Style.font.caption * 0.90
                                                         font.bold: true
-                                                        color: isDeep && modelData.seconds > 0
-                                                            ? Color.accent
-                                                            : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.85)
+                                                        color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.85)
                                                     }
                                                 }
 
@@ -2201,7 +2220,7 @@ Panel {
                                                     font.family: Style.font.family
                                                     font.pixelSize: Style.font.bodySmall
                                                     font.bold: true
-                                                    color: isDeep && modelData.seconds > 0 ? Color.accent : root.fg
+                                                    color: root.fg
                                                 }
 
                                                 Text {
@@ -2373,7 +2392,7 @@ Panel {
                             if (q.length === 0) return all
                             return all.filter(function(t) { return t.toLowerCase().indexOf(q) !== -1 })
                         }
-                        readonly property real rowH: Style.space(32)
+                        readonly property real rowH: Style.space(38)
                         width: parent.width
                         height: Math.max(rowH, Math.min(filtered.length, 6) * (rowH + spacing))
                         implicitHeight: height
@@ -2458,10 +2477,11 @@ Panel {
                                 // Color palette icon
                                 Text {
                                     id: tagPalIcon
+                                    Layout.rightMargin: Style.space(2)
                                     visible: isColorTarget || tagRowItem.isHovered
                                     text: "󰏘"
                                     font.family: Style.font.family
-                                    font.pixelSize: Style.font.bodySmall
+                                    font.pixelSize: Style.font.body * 1.25
                                     color: isColorTarget ? Color.accent : (palIconMouse.containsMouse ? Color.accent : root.dim)
 
                                     MouseArea {
@@ -2486,17 +2506,17 @@ Panel {
                                     visible: sel && !tagRowItem.isHovered && !isColorTarget
                                     text: "󰄬"
                                     font.family: Style.font.family
-                                    font.pixelSize: Style.font.bodySmall
+                                    font.pixelSize: Style.font.body * 1.25
                                     color: tagCol
                                 }
 
-                                // Trash icon
+                                // Archive icon
                                 Text {
                                     visible: tagRowItem.isHovered
-                                    text: "󰆴"
+                                    text: "󰀼"
                                     font.family: Style.font.family
-                                    font.pixelSize: Style.font.bodySmall
-                                    color: trashMouse.containsMouse ? Color.urgent : root.dim
+                                    font.pixelSize: Style.font.body * 1.25
+                                    color: trashMouse.containsMouse ? Color.accent : root.dim
 
                                     MouseArea {
                                         id: trashMouse
@@ -2506,14 +2526,13 @@ Panel {
                                         cursorShape: Qt.PointingHandCursor
                                         onClicked: if (root.w) {
                                             if (root.activeColorTarget === modelData) root.activeColorTarget = ""
-                                            if (root.appTagFilter === modelData) root.appTagFilter = ""
                                             root.w.removeTag(modelData)
                                         }
                                     }
 
                                     PanelToolTip {
                                         visible: trashMouse.containsMouse
-                                        text: "Delete subject"
+                                        text: "Archive subject"
                                     }
                                 }
                             }

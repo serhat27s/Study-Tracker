@@ -329,7 +329,14 @@ BarWidget {
         if (clean.length === 0) return
         var hasColor = Boolean(customColor && String(customColor).trim().length > 0)
         var tags = root.recentTags.slice()
-        var idx = tags.indexOf(clean)
+        var idx = -1
+        for (var i = 0; i < tags.length; i++) {
+            if (String(tags[i]).trim().toLowerCase() === clean.toLowerCase()) {
+                idx = i
+                clean = String(tags[i]).trim()
+                break
+            }
+        }
         if (root.activeTag === clean && idx !== -1 && !hasColor) return
         if (root.activeTag !== clean) {
             if (root.sessionDuration >= 60 && root.isStudySession) {
@@ -374,6 +381,26 @@ BarWidget {
         if (!skipSave) root.saveToDisk()
     }
 
+    function isListedTag(tag) {
+        var clean = String(tag || "").trim().toLowerCase()
+        if (clean.length === 0) return false
+        var tags = root.recentTags || []
+        for (var i = 0; i < tags.length; i++) {
+            if (String(tags[i]).trim().toLowerCase() === clean) return true
+        }
+        return false
+    }
+
+    function recoverTag(tag) {
+        var clean = String(tag || "").trim()
+        if (clean.length === 0 || root.isListedTag(clean)) return
+        var tags = root.recentTags.slice()
+        tags.unshift(clean)
+        if (tags.length > 20) tags = tags.slice(0, 20)
+        root.recentTags = tags
+        root.saveToDisk()
+    }
+
     function removeTag(tag) {
         var clean = String(tag || "").trim()
         if (clean.length === 0) return
@@ -393,10 +420,14 @@ BarWidget {
         if (tags.length === 0) tags = ["General"]
         root.recentTags = tags
 
-        // 2. If activeTag is this tag, switch to first remaining tag
+        // 2. If activeTag is this tag, save any running session (>=60s) and switch to first remaining tag
         if (String(root.activeTag).trim().toLowerCase() === clean.toLowerCase()) {
+            if (root.sessionDuration >= 60 && root.isStudySession) {
+                root.saveSessionRecord()
+            } else {
+                root.sessionDuration = 0
+            }
             root.activeTag = tags[0]
-            root.sessionDuration = 0
             if (root.activeMode === "pomodoro") {
                 if (root.pomodoroPhase === "work") root.remainingSeconds = root.pomodoroWorkDuration
             } else {
@@ -404,30 +435,7 @@ BarWidget {
             }
         }
 
-        // 3. Remove custom color if present
-        if (root.tagColors) {
-            var nextColors = Object.assign({}, root.tagColors)
-            var hadColor = false
-            for (var cKey in nextColors) {
-                if (String(cKey).trim().toLowerCase() === clean.toLowerCase()) {
-                    delete nextColors[cKey]
-                    hadColor = true
-                }
-            }
-            if (hadColor) {
-                root.tagColors = nextColors
-            }
-        }
-
-        // 4. Purge all sessions matching this tag from history so it doesn't mess up stats
-        var nextHistory = root.history.filter(function(sess) {
-            if (!sess) return false
-            var sessTag = String(sess.tag || "").trim().toLowerCase()
-            return sessTag !== clean.toLowerCase()
-        })
-        root.history = nextHistory
-
-        // 5. Persist to disk
+        // 3. Persist to disk (history and custom tagColors are preserved for past statistics)
         root.saveToDisk()
     }
 
