@@ -22,9 +22,10 @@ assert.strictEqual(Model.hexToRgb("invalid"), null);
 const hsv = Model.hexToHsv("#3b82f6");
 assert.strictEqual(Model.hsvToHex(hsv[0], hsv[1], hsv[2]), "#3b82f6");
 assert.strictEqual(Model.tagColor("Math", { Math: "#123456" }), "#123456");
-assert.strictEqual(Model.tagColor("Math", null), "#3b82f6");
+assert.strictEqual(Model.tagColor("math", { Math: "#123456" }), "#123456");
+assert.strictEqual(Model.tagColor("MATH", null), "#3b82f6");
 
-// 3. Subject stats aggregation
+// 3. Subject stats aggregation (including case-insensitive tag merging)
 const now = new Date();
 const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 12, 0, 0);
 const history = [
@@ -36,6 +37,15 @@ const todayStats = Model.aggregateTagStats(history, "today");
 assert.strictEqual(todayStats.grandTotalSeconds, 1800);
 assert.strictEqual(todayStats.tags.length, 1);
 assert.strictEqual(todayStats.tags[0].tag, "Math");
+
+const caseStats = Model.aggregateTagStats([
+    { id: "c1", tag: "Math", duration: 1200, timestamp: now.toISOString() },
+    { id: "c2", tag: "math", duration: 600, timestamp: yesterday.toISOString() }
+], "all");
+assert.strictEqual(caseStats.tags.length, 1);
+assert.strictEqual(caseStats.tags[0].tag, "Math");
+assert.strictEqual(caseStats.tags[0].totalSeconds, 1800);
+assert.strictEqual(caseStats.tags[0].sessionCount, 2);
 
 const weekStats = Model.aggregateTagStats(history, "week");
 assert.strictEqual(weekStats.grandTotalSeconds, 5400);
@@ -50,6 +60,9 @@ assert.ok(hm.weeks.length >= 52 && hm.weeks.length <= 54);
 assert.strictEqual(hm.weeks[0].length, 7);
 
 // 5. Consistency Tracker (Hours & Blocks modes, 2m grace period, live session, Weekends & Streak)
+assert.strictEqual(Model.blockPresetMinutes("ultradian"), 90);
+assert.strictEqual(Model.blockPresetMinutes("deepWork"), 50);
+assert.strictEqual(Model.blockPresetMinutes("unknown"), 50);
 assert.strictEqual(Model.sessionBlocksCount(87 * 60, 90), 0); // 87m < 90m - 2m
 assert.strictEqual(Model.sessionBlocksCount(88 * 60, 90), 1); // 88m >= 90m - 2m (2m grace)
 assert.strictEqual(Model.sessionBlocksCount(180 * 60, 90), 2); // 180m = 2x Ultradian
@@ -69,6 +82,21 @@ const consBlocks = Model.calculateConsistency(
 );
 const todayIdx = (now.getDay() + 6) % 7;
 assert.strictEqual(consBlocks.weekDays[todayIdx].blocks, 3); // 2 from 180m + 1 from 88m live
+
+// Live session crossing midnight (00:30 local on Wednesday Oct 14, 2026, 90m live -> 60m Tue + 30m Wed)
+const wedEarly = new Date(2026, 9, 14, 0, 30, 0);
+const consLiveCross = Model.calculateConsistency([], 90 * 60, {
+    goalMode: "blocks",
+    targetBlocks: 1,
+    blockPreset: "deepWork",
+    weekendsEnabled: true,
+    now: wedEarly
+});
+const wedIdx = (wedEarly.getDay() + 6) % 7;
+assert.strictEqual(consLiveCross.weekDays[wedIdx - 1].seconds, 60 * 60);
+assert.strictEqual(consLiveCross.weekDays[wedIdx - 1].blocks, 1);
+assert.strictEqual(consLiveCross.weekDays[wedIdx].seconds, 30 * 60);
+assert.strictEqual(consLiveCross.weekDays[wedIdx].blocks, 0);
 
 // 6. Midnight session splitting (22:00 -> 01:00 = 2h day 1 + 1h day 2)
 const afterMidnight = new Date(2026, 9, 14, 1, 0, 0); // 01:00 local time
@@ -142,7 +170,6 @@ const qualHist = [
 ];
 const qual = Model.calculateSessionQuality(qualHist, "today");
 assert.strictEqual(qual.totalCount, 3);
-assert.strictEqual(qual.avgMinutes, 45);
 assert.strictEqual(qual.tiers[0].count, 1); // Deep
 assert.strictEqual(qual.tiers[1].count, 1); // Focused
 assert.strictEqual(qual.tiers[2].count, 1); // Shallow

@@ -78,16 +78,20 @@ var DEFAULT_TAG_COLORS = {
 function tagColor(tagName, customMap) {
     var tag = String(tagName || "").trim();
     if (!tag) return TAG_COLORS[0];
-    if (customMap && typeof customMap === "object" && customMap[tag]) {
-        return customMap[tag];
+    var lower = tag.toLowerCase();
+    if (customMap && typeof customMap === "object") {
+        if (customMap[tag]) return customMap[tag];
+        for (var k in customMap) {
+            if (k.toLowerCase() === lower && customMap[k]) return customMap[k];
+        }
     }
-    if (DEFAULT_TAG_COLORS[tag]) {
-        return DEFAULT_TAG_COLORS[tag];
+    if (DEFAULT_TAG_COLORS[tag]) return DEFAULT_TAG_COLORS[tag];
+    for (var dk in DEFAULT_TAG_COLORS) {
+        if (dk.toLowerCase() === lower) return DEFAULT_TAG_COLORS[dk];
     }
     var hash = 0;
-    var str = tag.toLowerCase();
-    for (var i = 0; i < str.length; i++) {
-        hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    for (var i = 0; i < lower.length; i++) {
+        hash = ((hash << 5) - hash) + lower.charCodeAt(i);
         hash |= 0;
     }
     return TAG_COLORS[Math.abs(hash) % TAG_COLORS.length];
@@ -280,14 +284,15 @@ function aggregateTagStats(history, scope) {
         var sess = historyList[i];
         if (!sess || !sess.duration) continue;
         if (!matchesScope(sess.timestamp)) continue;
-        var tag = sess.tag || "General";
-        if (!tagMap[tag]) {
-            tagMap[tag] = { tag: tag, totalSeconds: 0, sessionCount: 0 };
+        var rawTag = String(sess.tag || "General").trim() || "General";
+        var key = rawTag.toLowerCase();
+        if (!tagMap[key]) {
+            tagMap[key] = { tag: rawTag, totalSeconds: 0, sessionCount: 0 };
         }
-        tagMap[tag].totalSeconds += sess.duration;
+        tagMap[key].totalSeconds += sess.duration;
         var primary = (sess.fullDuration === 0) ? findPrimarySegment(historyList, i) : null;
         if (!primary || !matchesScope(primary.timestamp)) {
-            tagMap[tag].sessionCount += 1;
+            tagMap[key].sessionCount += 1;
         }
         grandTotalSeconds += sess.duration;
     }
@@ -348,7 +353,6 @@ function calculateSessionQuality(history, scope) {
 
     var totalSec = shallowSec + focusedSec + deepSec;
     var totalCount = shallowCount + focusedCount + deepCount;
-    var avgMinutes = totalCount > 0 ? Math.round((totalSec / totalCount) / 60) : 0;
 
     var deepPct = totalSec > 0 ? Math.round((deepSec / totalSec) * 100) : 0;
     var focusedPct = totalSec > 0 ? Math.round((focusedSec / totalSec) * 100) : 0;
@@ -357,7 +361,6 @@ function calculateSessionQuality(history, scope) {
     return {
         totalSeconds: totalSec,
         totalCount: totalCount,
-        avgMinutes: avgMinutes,
         deepRatio: totalSec > 0 ? (deepSec / totalSec) : 0,
         focusedRatio: totalSec > 0 ? (focusedSec / totalSec) : 0,
         shallowRatio: totalSec > 0 ? (shallowSec / totalSec) : 0,
@@ -510,14 +513,12 @@ function buildHeatmap(history, year) {
 // Consistency Tracker (Daily Goal: Hours or Blocks, Weekends Off/On, Streak & 30d Hit Rate)
 // -----------------------------------------------------------------------------
 function blockPresetMinutes(preset) {
-    if (preset === "ultradian") return 90;
-    if (preset === "deepWork") return 50;
-    return 25;
+    return preset === "ultradian" ? 90 : 50;
 }
 
 function sessionBlocksCount(durationSeconds, blockMinutes) {
     var dur = Math.max(0, Math.floor(durationSeconds || 0));
-    var bMin = blockMinutes || 25;
+    var bMin = blockMinutes || 50;
     var blockSec = bMin * 60;
     var graceSec = 120; // 2 minutes grace period for stopping slightly before end
     if (dur < blockSec - graceSec) return 0;
@@ -553,15 +554,27 @@ function calculateConsistency(history, liveSessionSeconds, config) {
         dObj.blocks += sessionBlocksCount(bDur, bMin);
     }
 
-    var now = new Date();
+    var now = (cfg.now && !isNaN(new Date(cfg.now).getTime())) ? new Date(cfg.now) : new Date();
     var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     var todayKey = dateKey(today);
 
     var liveSec = Math.max(0, Math.floor(liveSessionSeconds || 0));
+    var todayLiveSec = 0;
+    var todayLiveFullSec = 0;
     if (liveSec > 0) {
-        var tObj = ensureDay(todayKey);
-        tObj.seconds += liveSec;
-        tObj.blocks += sessionBlocksCount(liveSec, bMin);
+        var liveSegs = splitSessionRecords(liveSec, now, "", "");
+        for (var ls = 0; ls < liveSegs.length; ls++) {
+            var seg = liveSegs[ls];
+            var segKey = dateKey(new Date(seg.timestamp));
+            var lObj = ensureDay(segKey);
+            lObj.seconds += seg.duration;
+            var lbDur = (typeof seg.fullDuration === "number") ? seg.fullDuration : seg.duration;
+            lObj.blocks += sessionBlocksCount(lbDur, bMin);
+            if (segKey === todayKey) {
+                todayLiveSec += seg.duration;
+                todayLiveFullSec += lbDur;
+            }
+        }
     }
 
     var targetSec = Math.round(targetHours * 3600);
@@ -584,9 +597,9 @@ function calculateConsistency(history, liveSessionSeconds, config) {
     var todayData = dayMap[todayKey] || { seconds: 0, blocks: 0 };
     var todayProgressRatio = 0;
     if (goalMode === "blocks") {
-        var completedLiveBlocks = sessionBlocksCount(liveSec, bMin);
-        var remLiveSec = Math.max(0, liveSec - completedLiveBlocks * blockSec);
-        var partialBlock = (liveSec > 0 && remLiveSec > 0) ? Math.min(0.95, remLiveSec / blockSec) : 0;
+        var completedLiveBlocks = sessionBlocksCount(todayLiveFullSec, bMin);
+        var remLiveSec = Math.max(0, todayLiveSec - completedLiveBlocks * blockSec);
+        var partialBlock = (todayLiveSec > 0 && remLiveSec > 0) ? Math.min(0.95, remLiveSec / blockSec) : 0;
         var effectiveBlocks = todayData.blocks + partialBlock;
         todayProgressRatio = Math.max(0, Math.min(1, effectiveBlocks / Math.max(1, targetBlocks)));
     } else {

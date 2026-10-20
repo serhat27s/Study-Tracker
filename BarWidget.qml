@@ -26,7 +26,7 @@ BarWidget {
     property string goalMode: "hours"             // "hours" | "blocks"
     property real goalTargetHours: 4.0            // 0.5h .. 12.0h (step 0.5)
     property int goalTargetBlocks: 2              // 1 .. 8
-    property string goalBlockPreset: "deepWork"   // "standard" (25m) | "deepWork" (50m) | "ultradian" (90m)
+    property string goalBlockPreset: "deepWork"   // "deepWork" (50m) | "ultradian" (90m)
     property bool goalWeekendsEnabled: false      // false = Mon-Fri (Sat/Sun Rest/Bonus), true = Mon-Sun
 
     property int remainingSeconds: 1500
@@ -132,7 +132,7 @@ BarWidget {
                         root.goalTargetHours = Math.round(parsed.goalTargetHours * 2) / 2
                     if (typeof parsed.goalTargetBlocks === "number" && parsed.goalTargetBlocks >= 1 && parsed.goalTargetBlocks <= 8)
                         root.goalTargetBlocks = Math.round(parsed.goalTargetBlocks)
-                    if (parsed.goalBlockPreset === "standard" || parsed.goalBlockPreset === "deepWork" || parsed.goalBlockPreset === "ultradian")
+                    if (parsed.goalBlockPreset === "deepWork" || parsed.goalBlockPreset === "ultradian")
                         root.goalBlockPreset = parsed.goalBlockPreset
                     if (typeof parsed.goalWeekendsEnabled === "boolean")
                         root.goalWeekendsEnabled = parsed.goalWeekendsEnabled
@@ -199,7 +199,7 @@ BarWidget {
             root.goalTargetHours = Math.max(0.5, Math.min(12.0, Math.round(updates.goalTargetHours * 2) / 2))
         if (typeof updates.goalTargetBlocks === "number")
             root.goalTargetBlocks = Math.max(1, Math.min(8, Math.round(updates.goalTargetBlocks)))
-        if (updates.goalBlockPreset === "standard" || updates.goalBlockPreset === "deepWork" || updates.goalBlockPreset === "ultradian")
+        if (updates.goalBlockPreset === "deepWork" || updates.goalBlockPreset === "ultradian")
             root.goalBlockPreset = updates.goalBlockPreset
         if (typeof updates.goalWeekendsEnabled === "boolean")
             root.goalWeekendsEnabled = updates.goalWeekendsEnabled
@@ -371,13 +371,15 @@ BarWidget {
                 break
             }
         }
-        if (root.activeTag === clean && idx !== -1 && !hasColor) return
-        if (root.activeTag !== clean) {
-            root.flushSession()
-            if (root.activeMode === "pomodoro") {
-                if (root.pomodoroPhase === "work") root.remainingSeconds = root.pomodoroWorkDuration
-            } else {
-                root.elapsedSeconds = 0
+        if (String(root.activeTag).trim().toLowerCase() === clean.toLowerCase() && idx !== -1 && !hasColor) return
+        if (String(root.activeTag).trim().toLowerCase() !== clean.toLowerCase()) {
+            if (root.sessionDuration >= 60 && root.isStudySession) {
+                root.saveSessionRecord()
+                if (root.activeMode === "pomodoro") {
+                    if (root.pomodoroPhase === "work") root.remainingSeconds = root.pomodoroWorkDuration
+                } else {
+                    root.elapsedSeconds = 0
+                }
             }
         }
         root.activeTag = clean
@@ -389,6 +391,11 @@ BarWidget {
             var c = String(customColor).trim()
             if (c.indexOf("#") !== 0) c = "#" + c
             var nextColors = Object.assign({}, root.tagColors)
+            for (var ck in nextColors) {
+                if (nextColors.hasOwnProperty(ck) && String(ck).trim().toLowerCase() === clean.toLowerCase()) {
+                    delete nextColors[ck]
+                }
+            }
             nextColors[clean] = c
             root.tagColors = nextColors
         }
@@ -399,12 +406,15 @@ BarWidget {
         var clean = String(tag).trim()
         if (clean.length === 0) return
         var next = Object.assign({}, root.tagColors)
+        for (var k in next) {
+            if (next.hasOwnProperty(k) && String(k).trim().toLowerCase() === clean.toLowerCase()) {
+                delete next[k]
+            }
+        }
         if (colorHex && String(colorHex).trim().length > 0) {
             var c = String(colorHex).trim()
             if (c.indexOf("#") !== 0) c = "#" + c
             next[clean] = c
-        } else {
-            delete next[clean]
         }
         root.tagColors = next
         if (!skipSave) root.saveToDisk()
@@ -450,13 +460,15 @@ BarWidget {
 
         // 2. If activeTag is this tag, save any running session (>=60s) and switch to first remaining tag
         if (String(root.activeTag).trim().toLowerCase() === clean.toLowerCase()) {
-            root.flushSession()
-            root.activeTag = tags[0]
-            if (root.activeMode === "pomodoro") {
-                if (root.pomodoroPhase === "work") root.remainingSeconds = root.pomodoroWorkDuration
-            } else {
-                root.elapsedSeconds = 0
+            if (root.sessionDuration >= 60 && root.isStudySession) {
+                root.saveSessionRecord()
+                if (root.activeMode === "pomodoro") {
+                    if (root.pomodoroPhase === "work") root.remainingSeconds = root.pomodoroWorkDuration
+                } else {
+                    root.elapsedSeconds = 0
+                }
             }
+            root.activeTag = tags[0]
         }
 
         // 3. Persist to disk (history and custom tagColors are preserved for past statistics)

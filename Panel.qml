@@ -91,7 +91,7 @@ Panel {
 
     readonly property var sessionQualityData: w
         ? Model.calculateSessionQuality(w.history, root.tagStatsScope)
-        : { totalSeconds: 0, totalCount: 0, avgMinutes: 0, deepRatio: 0, focusedRatio: 0, shallowRatio: 0, deepPct: 0, tiers: [] }
+        : { totalSeconds: 0, totalCount: 0, deepRatio: 0, focusedRatio: 0, shallowRatio: 0, deepPct: 0, tiers: [] }
 
     readonly property var consistencyData: w
         ? Model.calculateConsistency(w.history, root.liveSessionMinutes * 60, {
@@ -797,7 +797,7 @@ Panel {
                                         visible: !root.isPomodoro
                                         horizontalAlignment: Text.AlignHCenter
                                         elide: Text.ElideRight
-                                        text: "Studied today: " + root.heatmapData.todayHours
+                                        text: "Studied today: " + Model.formatHoursDecimal(root.heatmapData.todaySeconds + root.liveSessionMinutes * 60)
                                         font.family: Style.font.family
                                         font.pixelSize: Style.font.bodySmall
                                         color: root.dim
@@ -1903,7 +1903,7 @@ Panel {
 
                                             delegate: Rectangle {
                                                 readonly property color tagCol: root.colorForTag(modelData.tag)
-                                                readonly property bool isActive: modelData.tag === root.activeTag
+                                                readonly property bool isActive: String(modelData.tag).toLowerCase() === String(root.activeTag).toLowerCase()
                                                 readonly property bool isHov: root.hoveredSubjectTag === modelData.tag
                                                 readonly property bool isListed: (root.listedTags, root.isTagListed(modelData.tag))
                                                 width: tagList.width
@@ -2309,7 +2309,7 @@ Panel {
 
                         delegate: Rectangle {
                             id: tagRowItem
-                            readonly property bool sel: modelData === root.activeTag
+                            readonly property bool sel: String(modelData).toLowerCase() === String(root.activeTag).toLowerCase()
                             readonly property color tagCol: root.colorForTag(modelData)
                             readonly property bool isColorTarget: root.activeColorTarget === modelData
                             readonly property bool isHovered: rowHover.hovered || rowMouse.containsMouse || dotMouse.containsMouse || palIconMouse.containsMouse || trashMouse.containsMouse
