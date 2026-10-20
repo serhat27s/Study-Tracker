@@ -8,7 +8,7 @@ import "Model.js" as Model
 
 Panel {
     id: root
-    moduleName: "io.github.yourname.study-tracker"
+    moduleName: "io.github.sersah.study-tracker"
     manageIpc: false
 
     property var anchorItem: null

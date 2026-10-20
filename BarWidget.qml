@@ -7,7 +7,7 @@ import "Model.js" as Model
 
 BarWidget {
     id: root
-    moduleName: "io.github.yourname.study-tracker"
+    moduleName: "io.github.sersah.study-tracker"
 
     // Timer modes & durations (in seconds)
     property string activeMode: "pomodoro" // "pomodoro" | "tracker"

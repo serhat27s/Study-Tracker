@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "id": "io.github.yourname.study-tracker",
+  "id": "io.github.sersah.study-tracker",
   "name": "Study Tracker",
   "version": "1.0.0",
-  "author": "Your Name",
+  "author": "sersah",
   "license": "MIT",
   "description": "Dual-mode study timer with tag logging, activity heatmap, and consistency analytics.",
   "kinds": [

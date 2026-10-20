@@ -37,10 +37,10 @@ An Omarchy status bar plugin for tracking study sessions, subjects, consistency 
 Copy the plugin to your Omarchy plugins directory and enable it:
 
 ```bash
-mkdir -p ~/.config/omarchy/plugins/io.github.yourname.study-tracker
-cp -r ./* ~/.config/omarchy/plugins/io.github.yourname.study-tracker/
+mkdir -p ~/.config/omarchy/plugins/io.github.sersah.study-tracker
+cp -r ./* ~/.config/omarchy/plugins/io.github.sersah.study-tracker/
 omarchy-shell shell rescanPlugins
-omarchy plugin enable io.github.yourname.study-tracker --section center
+omarchy plugin enable io.github.sersah.study-tracker --section center
 ```
 
 ## Data Storage
