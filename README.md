@@ -6,8 +6,8 @@ An Omarchy status bar plugin for tracking study sessions, subjects, consistency 
 
 ## Features
 
-- **Focus Timer**: Pomodoro (*Standard*, *Deep Work*, *Ultradian* presets + custom intervals) and Stopwatch with desktop notifications, auto-save (`≥ 1m`), and crash recovery.
-- **Subjects**: Instant search, creation, non-destructive archiving, and custom colors (swatches, HSV sliders, `#HEX`).
+- **Focus Timer**: Pomodoro (*Standard*, *Deep Work*, *Ultradian* presets + custom intervals) and Stopwatch with desktop notifications, auto-save (`≥ 1m`).
+- **Subjects**: Instant search, creation, archiving.
 - **Activity Heatmap**: Full-year scrollable calendar grid with month jump, hover details, and streak counter.
 - **Statistics**: Daily goal tracker (Hours or Blocks with optional weekend rest days), subject donut chart, and session depth breakdown (*Deep*, *Focused*, *Shallow*).
 
@@ -19,7 +19,7 @@ An Omarchy status bar plugin for tracking study sessions, subjects, consistency 
 ## Install & Manage
 
 ```sh
-# Install (prompts for left / center / right bar section)
+# Install 
 omarchy plugin add https://github.com/sersah/Study-Tracker.git --enable
 
 # Update / Remove
