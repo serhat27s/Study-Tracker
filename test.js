@@ -75,25 +75,46 @@ const afterMidnight = new Date(2026, 9, 14, 1, 0, 0); // 01:00 local time
 const splitRecs = Model.splitSessionRecords(3 * 3600, afterMidnight, "Coding", "tracker");
 assert.strictEqual(splitRecs.length, 2);
 assert.strictEqual(splitRecs[0].duration, 3600);  // 00:00..01:00 on Oct 14
-assert.strictEqual(splitRecs[0].fullDuration, 3 * 3600);
+assert.strictEqual(splitRecs[0].fullDuration, 0);
 assert.strictEqual(Model.dateKey(new Date(splitRecs[0].timestamp)), "2026-10-14");
-assert.strictEqual(splitRecs[1].duration, 7200);  // 22:00..24:00 on Oct 13 (no 1s loss)
-assert.strictEqual(splitRecs[1].fullDuration, 0);
+assert.strictEqual(splitRecs[1].duration, 7200);  // 22:00..24:00 on Oct 13 (no 1s loss, primary segment)
+assert.strictEqual(splitRecs[1].fullDuration, 3 * 3600);
 assert.strictEqual(Model.dateKey(new Date(splitRecs[1].timestamp)), "2026-10-13");
 
-// Verify that midnight-split sessions preserve blocks & deep work tier
+// Verify that midnight-split sessions preserve blocks on the majority day & match today/all stats
 const todayEarly = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 30, 0);
 const cross90 = Model.splitSessionRecords(90 * 60, todayEarly, "Coding", "pomodoro");
 assert.strictEqual(cross90.length, 2);
-assert.strictEqual(cross90[0].fullDuration, 90 * 60);
-assert.strictEqual(cross90[1].fullDuration, 0);
+assert.strictEqual(cross90[0].fullDuration, 0);
+assert.strictEqual(cross90[1].fullDuration, 90 * 60);
 const crossBlocks = Model.calculateConsistency(cross90, 0, { goalMode: "blocks", targetBlocks: 1, blockPreset: "ultradian" });
-assert.strictEqual(crossBlocks.weekDays.reduce((acc, d) => acc + d.blocks, 0), 1);
+assert.strictEqual(crossBlocks.weekDays[todayIdx].blocks, 0); // Only 30m today
+if (todayIdx > 0) assert.strictEqual(crossBlocks.weekDays[todayIdx - 1].blocks, 1); // 60m yesterday gets the block
+const crossTagAll = Model.aggregateTagStats(cross90, "all");
+assert.strictEqual(crossTagAll.tags[0].sessionCount, 1);
 const crossQual = Model.calculateSessionQuality(cross90, "all");
 assert.strictEqual(crossQual.totalCount, 1);
+assert.strictEqual(crossQual.totalSeconds, 90 * 60);
 assert.strictEqual(crossQual.tiers[0].count, 1); // Classified as Deep (>= 50m)
 assert.strictEqual(crossQual.tiers[1].count, 0);
 assert.strictEqual(crossQual.tiers[2].count, 0);
+const crossTagToday = Model.aggregateTagStats(cross90, "today");
+const crossQualToday = Model.calculateSessionQuality(cross90, "today");
+assert.strictEqual(crossTagToday.grandTotalSeconds, 30 * 60);
+assert.strictEqual(crossTagToday.tags[0].sessionCount, 1);
+assert.strictEqual(crossQualToday.totalSeconds, 30 * 60);
+assert.strictEqual(crossQualToday.totalCount, 1);
+assert.strictEqual(crossQualToday.tiers[0].seconds, 30 * 60);
+
+// Also verify when majority of a midnight-split session is after midnight (30m yesterday + 60m today)
+const todayOneAm = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 1, 0, 0);
+const cross90TodayMaj = Model.splitSessionRecords(90 * 60, todayOneAm, "Coding", "pomodoro");
+assert.strictEqual(cross90TodayMaj[0].fullDuration, 90 * 60);
+assert.strictEqual(cross90TodayMaj[1].fullDuration, 0);
+const crossBlocksTodayMaj = Model.calculateConsistency(cross90TodayMaj, 0, { goalMode: "blocks", targetBlocks: 1, blockPreset: "ultradian" });
+assert.strictEqual(crossBlocksTodayMaj.weekDays[todayIdx].blocks, 1);
+assert.strictEqual(Model.calculateSessionQuality(cross90TodayMaj, "week").totalCount, 1);
+assert.strictEqual(Model.calculateSessionQuality(cross90TodayMaj, "today").totalSeconds, 60 * 60);
 
 // 7. Rest-day streak bridging across weekends when weekendsEnabled is false
 const streakHist = [];

@@ -45,4 +45,4 @@ omarchy plugin enable io.github.yourname.study-tracker --section center
 
 ## Data Storage
 
-Session history, subjects, custom colors, and timer settings are stored in `~/.local/share/study-tracker/data.json`. On first launch, sample history is generated so the heatmap and charts are populated immediately.
+Session history, subjects, custom colors, and timer settings are stored in `~/.local/share/study-tracker/data.json`.

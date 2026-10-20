@@ -86,7 +86,7 @@ BarWidget {
                     if (parsed && Array.isArray(parsed.history)) {
                         root.history = parsed.history
                     } else {
-                        root.history = Model.defaultSampleHistory()
+                        root.history = []
                         root.storageReady = true
                         root.saveToDisk()
                     }
@@ -124,8 +124,6 @@ BarWidget {
                         root.pomodoroShortBreakDuration = Number(parsed.pomodoroShortBreakDuration)
                     if (parsed.hasOwnProperty && parsed.hasOwnProperty("pomodoroLongBreakDuration") && !isNaN(Number(parsed.pomodoroLongBreakDuration)))
                         root.pomodoroLongBreakDuration = Math.max(0, Number(parsed.pomodoroLongBreakDuration))
-                    else if (parsed.pomodoroLongBreakDuration && Number(parsed.pomodoroLongBreakDuration) > 0)
-                        root.pomodoroLongBreakDuration = Number(parsed.pomodoroLongBreakDuration)
                     if (parsed.pomodoroCyclesTarget && Number(parsed.pomodoroCyclesTarget) > 0)
                         root.pomodoroCyclesTarget = Number(parsed.pomodoroCyclesTarget)
                     if (parsed.goalMode === "blocks" || parsed.goalMode === "hours")
@@ -142,7 +140,7 @@ BarWidget {
                         root.remainingSeconds = root.phaseDuration()
                     }
                 } else {
-                    root.history = Model.defaultSampleHistory()
+                    root.history = []
                     root.storageReady = true
                     root.saveToDisk()
                 }
@@ -161,7 +159,7 @@ BarWidget {
                 root.notify("Study Tracker Error", "Could not read data.json: error " + error)
                 return
             }
-            root.history = Model.defaultSampleHistory()
+            root.history = []
             root.storageReady = true
             root.saveToDisk()
         }
@@ -170,7 +168,6 @@ BarWidget {
     function saveToDisk() {
         if (!root.storageReady) return
         var payload = {
-            initialized: true,
             activeTag: root.activeTag,
             history: root.history,
             recentTags: root.recentTags,
@@ -328,38 +325,36 @@ BarWidget {
         }
     }
 
+    function syncRemainingWithPhase(oldPhaseTotal) {
+        if (root.activeMode !== "pomodoro") return
+        var nextTotal = root.phaseDuration()
+        if (!root.isRunning && root.sessionDuration === 0 && root.remainingSeconds === oldPhaseTotal) {
+            root.remainingSeconds = nextTotal
+        } else if (root.remainingSeconds > nextTotal) {
+            root.remainingSeconds = nextTotal
+        }
+    }
+
     function setPomodoroDuration(phase, seconds) {
         if (!seconds || seconds <= 0) return
+        var oldTotal = root.phaseDuration()
         var sec = Math.round(seconds)
-        if (phase === "work") {
-            root.pomodoroWorkDuration = sec
-            if (!root.isRunning && root.sessionDuration === 0 && root.pomodoroPhase === "work" && root.activeMode === "pomodoro") {
-                root.remainingSeconds = sec
-            }
-        } else if (phase === "shortBreak") {
-            root.pomodoroShortBreakDuration = sec
-            if (!root.isRunning && root.sessionDuration === 0 && root.pomodoroPhase === "shortBreak" && root.activeMode === "pomodoro") {
-                root.remainingSeconds = sec
-            }
-        } else if (phase === "longBreak") {
-            root.pomodoroLongBreakDuration = sec
-            if (!root.isRunning && root.sessionDuration === 0 && root.pomodoroPhase === "longBreak" && root.activeMode === "pomodoro") {
-                root.remainingSeconds = sec
-            }
-        }
+        if (phase === "work") root.pomodoroWorkDuration = sec
+        else if (phase === "shortBreak") root.pomodoroShortBreakDuration = sec
+        else if (phase === "longBreak") root.pomodoroLongBreakDuration = sec
+        root.syncRemainingWithPhase(oldTotal)
         root.saveToDisk()
     }
 
     function setPomodoroPreset(workMin, shortBreakMin, longBreakMin) {
+        var oldTotal = root.phaseDuration()
         root.pomodoroWorkDuration = Math.round(workMin * 60)
         root.pomodoroShortBreakDuration = Math.round(shortBreakMin * 60)
         root.pomodoroLongBreakDuration = Math.round((longBreakMin || 0) * 60)
         if (root.pomodoroLongBreakDuration <= 0 && root.pomodoroPhase === "longBreak") {
             root.pomodoroPhase = "shortBreak"
         }
-        if (!root.isRunning && root.sessionDuration === 0 && root.activeMode === "pomodoro") {
-            root.remainingSeconds = root.phaseDuration()
-        }
+        root.syncRemainingWithPhase(oldTotal)
         root.saveToDisk()
     }
 

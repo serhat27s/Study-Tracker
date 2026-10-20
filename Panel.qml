@@ -57,13 +57,7 @@ Panel {
     readonly property var listedTags: w ? w.recentTags : []
 
     function isTagListed(name) {
-        var clean = String(name || "").trim().toLowerCase()
-        if (clean.length === 0) return false
-        var tags = root.listedTags || []
-        for (var i = 0; i < tags.length; i++) {
-            if (String(tags[i]).trim().toLowerCase() === clean) return true
-        }
-        return false
+        return Boolean(w && w.isListedTag(name))
     }
 
     readonly property int phaseTotal: w ? w.phaseDuration() : 1500
@@ -83,20 +77,24 @@ Panel {
         return ""
     }
 
-    readonly property var heatmapData: (w && root.opened && root.currentTab === 0)
-        ? Model.buildHeatmap(w.history, root.heatmapYear)
-        : { year: root.heatmapYear, weeks: [], numWeeks: 0, todayWeekIndex: 0, totalSeconds: 0, yearHours: "0.0 hrs", todayHours: "0.0 hrs", streakDays: 0 }
+    readonly property int liveSessionMinutes: (w && w.isStudySession && root.opened)
+        ? Math.floor(w.sessionDuration / 60)
+        : 0
 
-    readonly property var tagStatsData: (w && root.opened && root.currentTab === 1)
+    readonly property var heatmapData: w
+        ? Model.buildHeatmap(w.history, root.heatmapYear)
+        : { year: root.heatmapYear, weeks: [], todayWeekIndex: 0, totalSeconds: 0, todayHours: "0.0 hrs", streakDays: 0 }
+
+    readonly property var tagStatsData: w
         ? Model.aggregateTagStats(w.history, root.tagStatsScope)
         : { tags: [], grandTotalSeconds: 0, grandTotalHours: "0.0 hrs" }
 
-    readonly property var sessionQualityData: (w && root.opened && root.currentTab === 1)
+    readonly property var sessionQualityData: w
         ? Model.calculateSessionQuality(w.history, root.tagStatsScope)
         : { totalSeconds: 0, totalCount: 0, avgMinutes: 0, deepRatio: 0, focusedRatio: 0, shallowRatio: 0, deepPct: 0, tiers: [] }
 
-    readonly property var consistencyData: (w && root.opened && root.currentTab === 1)
-        ? Model.calculateConsistency(w.history, Math.floor((w.isStudySession ? w.sessionDuration : 0) / 60) * 60, {
+    readonly property var consistencyData: w
+        ? Model.calculateConsistency(w.history, root.liveSessionMinutes * 60, {
             goalMode: w.goalMode,
             targetHours: w.goalTargetHours,
             targetBlocks: w.goalTargetBlocks,
@@ -597,17 +595,19 @@ Panel {
 
                                             // Zyklus-Punkte (nur Pomodoro mit langer Pause)
                                             Row {
+                                                id: cycleDotsRow
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 spacing: Style.space(4)
                                                 visible: root.isPomodoro && (!root.w || root.w.pomodoroLongBreakDuration > 0)
+                                                readonly property int cycleTarget: (root.w && root.w.pomodoroCyclesTarget > 0) ? root.w.pomodoroCyclesTarget : 4
 
                                                 Repeater {
-                                                    model: 4
+                                                    model: cycleDotsRow.cycleTarget
                                                     Rectangle {
                                                         readonly property int done: {
                                                             if (!root.w) return 0
-                                                            if (root.w.pomodoroPhase === "longBreak") return 4
-                                                            return root.w.pomodoroCyclesCompleted % 4
+                                                            if (root.w.pomodoroPhase === "longBreak") return cycleDotsRow.cycleTarget
+                                                            return root.w.pomodoroCyclesCompleted % cycleDotsRow.cycleTarget
                                                         }
                                                         width: Style.space(7)
                                                         height: width
@@ -2253,14 +2253,7 @@ Panel {
                             font.family: Style.font.family
                             font.pixelSize: Style.font.body
                             maximumLength: 24
-                            Keys.onReturnPressed: function(event) {
-                                event.accepted = true
-                                root.submitNewTag()
-                            }
-                            Keys.onEnterPressed: function(event) {
-                                event.accepted = true
-                                root.submitNewTag()
-                            }
+                            onAccepted: root.submitNewTag()
                             Keys.onEscapePressed: function(event) {
                                 event.accepted = true
                                 if (root.activeColorTarget.length > 0) colorPaletteCard.cancelAndClose()

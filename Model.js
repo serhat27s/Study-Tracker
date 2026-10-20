@@ -229,6 +229,7 @@ function splitSessionRecords(durationSeconds, endDate, tag, mode) {
     var records = [];
     var curEndMs = end.getTime();
     var idx = 0;
+    var maxIdx = 0;
 
     while (curEndMs > startMs) {
         var curDate = new Date(curEndMs - 1);
@@ -237,19 +238,36 @@ function splitSessionRecords(durationSeconds, endDate, tag, mode) {
         var segSec = Math.round((curEndMs - segStartMs) / 1000);
         if (segSec > 0) {
             var tsDate = (idx === 0) ? new Date(curEndMs) : new Date(curEndMs - 1);
+            if (records.length > 0 && segSec > records[maxIdx].duration) {
+                maxIdx = records.length;
+            }
             records.push({
                 id: "sess_" + tsDate.getTime() + (idx > 0 ? "_" + idx : ""),
                 tag: tag || "General",
                 mode: mode || "pomodoro",
                 duration: segSec,
-                fullDuration: (idx === 0) ? dur : 0,
+                fullDuration: 0,
                 timestamp: tsDate.toISOString()
             });
             idx++;
         }
         curEndMs = dayStartMs;
     }
+    if (records.length > 0) {
+        records[maxIdx].fullDuration = dur;
+    }
     return records;
+}
+
+function findPrimarySegment(historyList, i) {
+    var cur = historyList[i];
+    var isTail = Boolean(cur && cur.id && cur.id.indexOf("_", 5) !== -1);
+    var step = isTail ? -1 : 1;
+    for (var j = i + step; j >= 0 && j < historyList.length; j += step) {
+        if (historyList[j] && historyList[j].fullDuration > 0) return historyList[j];
+        if (!historyList[j] || historyList[j].fullDuration !== 0) break;
+    }
+    return null;
 }
 
 function aggregateTagStats(history, scope) {
@@ -267,7 +285,10 @@ function aggregateTagStats(history, scope) {
             tagMap[tag] = { tag: tag, totalSeconds: 0, sessionCount: 0 };
         }
         tagMap[tag].totalSeconds += sess.duration;
-        tagMap[tag].sessionCount += 1;
+        var primary = (sess.fullDuration === 0) ? findPrimarySegment(historyList, i) : null;
+        if (!primary || !matchesScope(primary.timestamp)) {
+            tagMap[tag].sessionCount += 1;
+        }
         grandTotalSeconds += sess.duration;
     }
 
@@ -308,19 +329,20 @@ function calculateSessionQuality(history, scope) {
 
     for (var i = 0; i < historyList.length; i++) {
         var sess = historyList[i];
-        if (!sess || !sess.duration) continue;
+        if (!sess || !sess.duration || sess.duration <= 0) continue;
         if (!matchesScope(sess.timestamp)) continue;
-        var d = (typeof sess.fullDuration === "number") ? sess.fullDuration : sess.duration;
-        if (d <= 0) continue;
-        if (d >= deepMinSec) {
-            deepSec += d;
-            deepCount++;
-        } else if (d >= focusedMinSec) {
-            focusedSec += d;
-            focusedCount++;
+        var primary = (sess.fullDuration === 0) ? findPrimarySegment(historyList, i) : null;
+        var tierSec = primary ? primary.fullDuration : ((typeof sess.fullDuration === "number" && sess.fullDuration > 0) ? sess.fullDuration : sess.duration);
+        var countInc = (!primary || !matchesScope(primary.timestamp)) ? 1 : 0;
+        if (tierSec >= deepMinSec) {
+            deepSec += sess.duration;
+            deepCount += countInc;
+        } else if (tierSec >= focusedMinSec) {
+            focusedSec += sess.duration;
+            focusedCount += countInc;
         } else {
-            shallowSec += d;
-            shallowCount++;
+            shallowSec += sess.duration;
+            shallowCount += countInc;
         }
     }
 
@@ -384,12 +406,7 @@ function buildHeatmap(history, year) {
         var sess = historyList[i];
         if (!sess || !sess.timestamp || !sess.duration) continue;
         var dk = dateKey(new Date(sess.timestamp));
-        if (!dayMap[dk]) {
-            dayMap[dk] = { totalSeconds: 0, tags: {} };
-        }
-        dayMap[dk].totalSeconds += sess.duration;
-        var tag = sess.tag || "General";
-        dayMap[dk].tags[tag] = (dayMap[dk].tags[tag] || 0) + sess.duration;
+        dayMap[dk] = (dayMap[dk] || 0) + sess.duration;
     }
 
     var today = new Date();
@@ -411,9 +428,8 @@ function buildHeatmap(history, year) {
     var numWeeks = Math.round(totalDays / 7);
 
     var weeks = [];
-    var yearSecondsLogged = 0;
     var totalSecondsLogged = 0;
-    var todaySeconds = (dayMap[todayDk] ? dayMap[todayDk].totalSeconds : 0);
+    var todaySeconds = dayMap[todayDk] || 0;
     var todayWeekIndex = -1;
 
     for (var w = 0; w < numWeeks; w++) {
@@ -425,19 +441,15 @@ function buildHeatmap(history, year) {
             var isOutsideYear = (cellDate.getFullYear() !== targetYear);
             var isFuture = (cellDate.getTime() > today.getTime() && dk !== todayDk);
             var isToday = (dk === todayDk);
-            var info = dayMap[dk] || { totalSeconds: 0, tags: {} };
-            var sec = info.totalSeconds;
+            var sec = dayMap[dk] || 0;
             var mins = Math.round(sec / 60);
 
             if (isToday) {
                 todayWeekIndex = w;
             }
 
-            if (!isOutsideYear) {
-                yearSecondsLogged += sec;
-                if (cellDate.getDate() === 1 || (w === 0 && cellDate.getDate() === jan1.getDate())) {
-                    monthLabel = MONTH_NAMES[cellDate.getMonth()];
-                }
+            if (!isOutsideYear && (cellDate.getDate() === 1 || (w === 0 && cellDate.getDate() === jan1.getDate()))) {
+                monthLabel = MONTH_NAMES[cellDate.getMonth()];
             }
 
             var level = 0;
@@ -446,29 +458,15 @@ function buildHeatmap(history, year) {
             else if (mins >= 30) level = 2;
             else if (mins > 0) level = 1;
 
-            var tagArr = [];
-            for (var t in info.tags) {
-                tagArr.push({ tag: t, sec: info.tags[t] });
-            }
-            tagArr.sort(function(a, b) { return b.sec - a.sec; });
-            var dominantTagsStr = tagArr.map(function(item) {
-                return item.tag + ": " + formatDurationHuman(item.sec);
-            }).join(" · ");
-
             days.push({
                 dateKey: dk,
                 dateStr: formatDateReadable(dk),
-                dayOfWeek: d,
-                weekIndex: w,
                 isToday: isToday,
                 isFuture: isFuture,
                 isOutsideYear: isOutsideYear,
                 totalSeconds: sec,
-                totalMinutes: mins,
                 focusTimeStr: sec > 0 ? formatDurationHuman(sec) : "0 min",
-                hoursDec: formatHoursDecimal(sec),
                 level: level,
-                dominantTags: dominantTagsStr,
                 monthLabel: ""
             });
         }
@@ -480,12 +478,12 @@ function buildHeatmap(history, year) {
 
     var streak = 0;
     var checkDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    if ((dayMap[dateKey(checkDate)] ? dayMap[dateKey(checkDate)].totalSeconds : 0) === 0) {
+    if ((dayMap[dateKey(checkDate)] || 0) === 0) {
         checkDate.setDate(checkDate.getDate() - 1);
     }
     while (true) {
         var k = dateKey(checkDate);
-        if (dayMap[k] && dayMap[k].totalSeconds > 0) {
+        if (dayMap[k] > 0) {
             streak++;
             checkDate.setDate(checkDate.getDate() - 1);
         } else {
@@ -494,19 +492,16 @@ function buildHeatmap(history, year) {
     }
 
     for (var k2 in dayMap) {
-        totalSecondsLogged += dayMap[k2].totalSeconds;
+        totalSecondsLogged += dayMap[k2];
     }
 
     return {
         year: targetYear,
         weeks: weeks,
-        numWeeks: numWeeks,
         todayWeekIndex: (todayWeekIndex >= 0 ? todayWeekIndex : (targetYear < today.getFullYear() ? (numWeeks - 1) : 0)),
         totalSeconds: totalSecondsLogged,
-        yearSeconds: yearSecondsLogged,
         todaySeconds: todaySeconds,
         todayHours: formatHoursDecimal(todaySeconds),
-        yearHours: formatHoursDecimal(yearSecondsLogged),
         streakDays: streak
     };
 }
@@ -717,37 +712,4 @@ function calculateConsistency(history, liveSessionSeconds, config) {
         reqMet30: reqMet30,
         reqTotal30: reqTotal30
     };
-}
-
-// -----------------------------------------------------------------------------
-// Sample history with English default subjects
-// -----------------------------------------------------------------------------
-function defaultSampleHistory() {
-    var now = new Date();
-    var list = [];
-    var tags = ["Math", "Coding", "Physics", "Reading", "Research", "English"];
-
-    // Generate realistic study sessions across the entire year (364 days = 52 weeks)
-    for (var d = 364; d >= 0; d--) {
-        // Rest days: ~2 days per week, plus some variance
-        var dayOfWeek = (new Date(now.getTime() - d * 86400000).getDay() + 6) % 7;
-        var skip = (d > 14 && (d % 7 === 5 || (d % 11 === 0 && dayOfWeek === 6)));
-        if (skip) continue;
-
-        var count = (d % 5 === 0) ? 2 : (d % 9 === 0 ? 3 : 1);
-        for (var c = 0; c < count; c++) {
-            var sessDate = new Date(now.getTime() - d * 86400000 - (c * 2 + 1) * 3600000);
-            var tag = tags[(d + c) % tags.length];
-            var dur = ((d % 3 === 0 ? 25 : (d % 2 === 0 ? 50 : 30)) + c * 15) * 60;
-
-            list.push({
-                id: "sample_" + sessDate.getTime() + "_" + c,
-                tag: tag,
-                mode: (dur <= 1800 ? "pomodoro" : "tracker"),
-                duration: dur,
-                timestamp: sessDate.toISOString()
-            });
-        }
-    }
-    return list;
 }

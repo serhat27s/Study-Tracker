@@ -391,16 +391,7 @@ Rectangle {
                         colorPaletteCard.isSyncing = false
                     }
                 }
-                Keys.onReturnPressed: function(event) {
-                    event.accepted = true
-                    var h = text.trim()
-                    if (h.indexOf("#") !== 0 && h.length > 0) h = "#" + h
-                    if (Model.hexToRgb(h)) {
-                        colorPaletteCard.selectSwatch(h)
-                    }
-                }
-                Keys.onEnterPressed: function(event) {
-                    event.accepted = true
+                onAccepted: {
                     var h = text.trim()
                     if (h.indexOf("#") !== 0 && h.length > 0) h = "#" + h
                     if (Model.hexToRgb(h)) {
