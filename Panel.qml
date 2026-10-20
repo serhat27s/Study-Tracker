@@ -66,12 +66,7 @@ Panel {
         return false
     }
 
-    readonly property int phaseTotal: {
-        if (!w) return 1500
-        if (w.pomodoroPhase === "shortBreak") return w.pomodoroShortBreakDuration
-        if (w.pomodoroPhase === "longBreak") return w.pomodoroLongBreakDuration
-        return w.pomodoroWorkDuration
-    }
+    readonly property int phaseTotal: w ? w.phaseDuration() : 1500
     readonly property real timerProgress: {
         if (!w) return 0
         if (isPomodoro) return Math.max(0, Math.min(1, 1 - w.remainingSeconds / Math.max(1, phaseTotal)))
@@ -122,11 +117,7 @@ Panel {
     }
 
     function getPomodoroDuration(phase) {
-        if (!w) return 1500
-        if (phase === "work") return w.pomodoroWorkDuration
-        if (phase === "shortBreak") return w.pomodoroShortBreakDuration
-        if (phase === "longBreak") return w.pomodoroLongBreakDuration
-        return 1500
+        return w ? w.phaseDuration(phase) : 1500
     }
 
     function scrollToCurrent() {

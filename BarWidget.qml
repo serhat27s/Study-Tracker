@@ -139,9 +139,7 @@ BarWidget {
                     if (typeof parsed.goalWeekendsEnabled === "boolean")
                         root.goalWeekendsEnabled = parsed.goalWeekendsEnabled
                     if (!root.isRunning && root.activeMode === "pomodoro") {
-                        root.remainingSeconds = (root.pomodoroPhase === "work")
-                            ? root.pomodoroWorkDuration
-                            : (root.pomodoroPhase === "shortBreak" ? root.pomodoroShortBreakDuration : root.pomodoroLongBreakDuration)
+                        root.remainingSeconds = root.phaseDuration()
                     }
                 } else {
                     root.history = Model.defaultSampleHistory()
@@ -289,15 +287,26 @@ BarWidget {
         root.saveToDisk()
     }
 
-    function resetTimer() {
-        root.isRunning = false
+    function phaseDuration(phase) {
+        var p = phase || root.pomodoroPhase
+        if (p === "shortBreak") return root.pomodoroShortBreakDuration
+        if (p === "longBreak") return root.pomodoroLongBreakDuration
+        return root.pomodoroWorkDuration
+    }
+
+    function flushSession() {
         if (root.sessionDuration >= 60 && root.isStudySession) {
             root.saveSessionRecord()
         } else {
             root.sessionDuration = 0
         }
+    }
+
+    function resetTimer() {
+        root.isRunning = false
+        root.flushSession()
         if (root.activeMode === "pomodoro") {
-            root.remainingSeconds = (root.pomodoroPhase === "work") ? root.pomodoroWorkDuration : (root.pomodoroPhase === "shortBreak" ? root.pomodoroShortBreakDuration : root.pomodoroLongBreakDuration)
+            root.remainingSeconds = root.phaseDuration()
         } else {
             root.elapsedSeconds = 0
         }
@@ -309,15 +318,11 @@ BarWidget {
 
     function setMode(mode) {
         if (root.activeMode === mode) return
-        if (root.sessionDuration >= 60 && root.isStudySession) {
-            root.saveSessionRecord()
-        } else {
-            root.sessionDuration = 0
-        }
+        root.flushSession()
         root.isRunning = false
         root.activeMode = mode
         if (mode === "pomodoro") {
-            root.remainingSeconds = (root.pomodoroPhase === "work") ? root.pomodoroWorkDuration : (root.pomodoroPhase === "shortBreak" ? root.pomodoroShortBreakDuration : root.pomodoroLongBreakDuration)
+            root.remainingSeconds = root.phaseDuration()
         } else {
             root.elapsedSeconds = 0
         }
@@ -353,9 +358,7 @@ BarWidget {
             root.pomodoroPhase = "shortBreak"
         }
         if (!root.isRunning && root.sessionDuration === 0 && root.activeMode === "pomodoro") {
-            if (root.pomodoroPhase === "work") root.remainingSeconds = root.pomodoroWorkDuration
-            else if (root.pomodoroPhase === "shortBreak") root.remainingSeconds = root.pomodoroShortBreakDuration
-            else if (root.pomodoroPhase === "longBreak") root.remainingSeconds = root.pomodoroLongBreakDuration
+            root.remainingSeconds = root.phaseDuration()
         }
         root.saveToDisk()
     }
@@ -375,11 +378,7 @@ BarWidget {
         }
         if (root.activeTag === clean && idx !== -1 && !hasColor) return
         if (root.activeTag !== clean) {
-            if (root.sessionDuration >= 60 && root.isStudySession) {
-                root.saveSessionRecord()
-            } else {
-                root.sessionDuration = 0
-            }
+            root.flushSession()
             if (root.activeMode === "pomodoro") {
                 if (root.pomodoroPhase === "work") root.remainingSeconds = root.pomodoroWorkDuration
             } else {
@@ -389,7 +388,6 @@ BarWidget {
         root.activeTag = clean
         if (idx === -1) {
             tags.unshift(clean)
-            if (tags.length > 20) tags = tags.slice(0, 20)
             root.recentTags = tags
         }
         if (hasColor) {
@@ -432,7 +430,6 @@ BarWidget {
         if (clean.length === 0 || root.isListedTag(clean)) return
         var tags = root.recentTags.slice()
         tags.unshift(clean)
-        if (tags.length > 20) tags = tags.slice(0, 20)
         root.recentTags = tags
         root.saveToDisk()
     }
@@ -458,11 +455,7 @@ BarWidget {
 
         // 2. If activeTag is this tag, save any running session (>=60s) and switch to first remaining tag
         if (String(root.activeTag).trim().toLowerCase() === clean.toLowerCase()) {
-            if (root.sessionDuration >= 60 && root.isStudySession) {
-                root.saveSessionRecord()
-            } else {
-                root.sessionDuration = 0
-            }
+            root.flushSession()
             root.activeTag = tags[0]
             if (root.activeMode === "pomodoro") {
                 if (root.pomodoroPhase === "work") root.remainingSeconds = root.pomodoroWorkDuration
