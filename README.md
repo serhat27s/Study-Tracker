@@ -6,52 +6,25 @@ An Omarchy status bar plugin for tracking study sessions, subjects, consistency 
 
 ## Features
 
-- **Focus Timer**
-  - **Pomodoro**: Configurable work, short break, and long break intervals with presets (*Standard* 25/5/15m, *Deep Work* 50/10/30m, *Ultradian* 90/20m) and desktop notifications (`notify-send`).
-  - **Stopwatch**: Open-ended session timer.
-  - **Auto-Save**: Completed blocks and interrupted sessions (≥ 1 min) are logged automatically when resetting, switching modes, or changing subjects.
-- **Subject Management**
-  - Filterable subject menu with instant search, creation, and deletion.
-  - Custom subject colors via 14 curated swatches, interactive HSV sliders, `#HEX` input, or random color generation.
-- **Full-Year Activity Heatmap**
-  - Horizontally scrollable 52–53 week GitHub-style calendar grid (Jan–Dec) with month navigation, *Today* jump, hover inspection, and daily streak counter.
-- **Statistics & Consistency**
-  - **Consistency Tracker**: Daily goal tracking by **Hours** (`0.5h–12h`) or **Blocks** (*Ultradian 90m* / *Deep Work 50m* with 2-minute grace), optional Weekend Rest Days (`Mon–Fri` vs `Mon–Sun`), weekly day tiles, **Goal Streak**, and **30d Hit Rate**.
-  - **Hours by Subject**: Interactive donut chart and ranked legend of study hours and share per subject across **Today**, **Week**, **Month**, and **Total**.
-  - **Session Depth & Quality**: Categorizes sessions into **Deep** (`≥ 50m`), **Focused** (`25–50m`), and **Shallow** (`< 25m`) with a stacked distribution bar.
+- **Focus Timer**: Pomodoro (*Standard*, *Deep Work*, *Ultradian* presets + custom intervals) and Stopwatch with desktop notifications, auto-save (`≥ 1m`), and crash recovery.
+- **Subjects**: Instant search, creation, non-destructive archiving, and custom colors (swatches, HSV sliders, `#HEX`).
+- **Activity Heatmap**: Full-year scrollable calendar grid with month jump, hover details, and streak counter.
+- **Statistics**: Daily goal tracker (Hours or Blocks with optional weekend rest days), subject donut chart, and session depth breakdown (*Deep*, *Focused*, *Shallow*).
 
 ## Controls & Shortcuts
 
-**Bar Widget**
-- `Left Click`: Open / close panel
-- `Right Click`: Start / pause timer
+- **Bar Widget**: `Left Click` toggle panel · `Right Click` start / pause
+- **Panel**: `Space`/`Enter` start / pause · `r`/`s` reset · `m` switch mode · `t` subjects · `1`/`2` or `←`/`→` switch tabs · `Esc` close
 
-**Panel Keyboard Shortcuts**
-- `Space` / `Enter`: Start / pause timer
-- `r` / `s`: Reset timer
-- `m`: Toggle between Pomodoro and Stopwatch
-- `t`: Open subject menu
-- `1` / `2` or `←` / `→`: Switch between *Focus* and *Statistics* tabs
-- `Esc`: Close menu or panel
-
-## Install
+## Install & Manage
 
 ```sh
+# Install (prompts for left / center / right bar section)
 omarchy plugin add https://github.com/sersah/Study-Tracker.git --enable
-```
 
-## Configure
-
-```sh
-omarchy bar move io.github.sersah.study-tracker --section center
-```
-
-## Remove
-
-```sh
+# Update / Remove
+omarchy plugin update io.github.sersah.study-tracker
 omarchy plugin remove io.github.sersah.study-tracker
 ```
 
-## Data Storage
-
-Session history, subjects, custom colors, and timer settings are stored in `~/.local/share/study-tracker/data.json`.
+Data is stored in `~/.local/share/study-tracker/data.json`.
