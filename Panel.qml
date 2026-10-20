@@ -1499,7 +1499,7 @@ Panel {
                                     }
                                 }
 
-                                // 2. THIS WEEK (Mon–Sun) + 4 / 5 Days ✓ + 7 Day Tiles
+                                // 2. THIS WEEK + 4 / 5 Days ✓ + 7 Day Tiles
                                 ColumnLayout {
                                     Layout.fillWidth: true
                                     spacing: Style.space(5)
@@ -1508,7 +1508,7 @@ Panel {
                                         Layout.fillWidth: true
 
                                         Text {
-                                            text: "THIS WEEK (Mon–Sun)"
+                                            text: "THIS WEEK"
                                             font.family: Style.font.family
                                             font.pixelSize: Style.font.caption
                                             font.bold: true

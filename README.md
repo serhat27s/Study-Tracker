@@ -2,6 +2,8 @@
 
 An Omarchy status bar plugin for tracking study sessions, subjects, consistency goals, and session depth.
 
+![Preview](preview.png)
+
 ## Features
 
 - **Focus Timer**
