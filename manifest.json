@@ -5,7 +5,7 @@
   "version": "1.0.0",
   "author": "sersah",
   "license": "MIT",
-  "description": "Dual-mode study timer with tag logging, activity heatmap, and consistency analytics.",
+  "description": "Pomodoro and stopwatch study timer with subjects, activity heatmap, daily goals, and session-depth stats.",
   "kinds": [
     "bar-widget"
   ],
