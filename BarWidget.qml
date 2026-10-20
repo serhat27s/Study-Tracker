@@ -90,6 +90,25 @@ BarWidget {
                         root.storageReady = true
                         root.saveToDisk()
                     }
+                    var hadPending = false
+                    if (parsed && parsed.pendingSession && parsed.pendingSession.duration >= 60) {
+                        var pSess = parsed.pendingSession
+                        var recDate = (parsed.lastSaved && !isNaN(new Date(parsed.lastSaved).getTime()))
+                            ? new Date(parsed.lastSaved)
+                            : new Date()
+                        var recs = Model.splitSessionRecords(
+                            pSess.duration,
+                            recDate,
+                            pSess.tag || "General",
+                            pSess.mode || "pomodoro"
+                        )
+                        var restoredHistory = root.history.slice()
+                        for (var r = recs.length - 1; r >= 0; r--) {
+                            restoredHistory.unshift(recs[r])
+                        }
+                        root.history = restoredHistory
+                        hadPending = true
+                    }
                     if (parsed && parsed.activeTag && String(parsed.activeTag).trim().length > 0) {
                         root.activeTag = String(parsed.activeTag).trim()
                     }
@@ -130,11 +149,20 @@ BarWidget {
                     root.saveToDisk()
                 }
                 root.storageReady = true
+                if (hadPending) {
+                    root.saveToDisk()
+                }
             } catch (e) {
                 console.warn("StudyTracker: data.json read error, preserving file:", e)
+                root.notify("Study Tracker Error", "data.json is corrupt! Sessions are NOT being saved.")
             }
         }
-        onLoadFailed: {
+        onLoadFailed: function(error) {
+            if (error !== FileViewError.FileNotFound) {
+                console.warn("StudyTracker: data.json read failed with error:", error)
+                root.notify("Study Tracker Error", "Could not read data.json: error " + error)
+                return
+            }
             root.history = Model.defaultSampleHistory()
             root.storageReady = true
             root.saveToDisk()
@@ -158,6 +186,11 @@ BarWidget {
             goalTargetBlocks: root.goalTargetBlocks,
             goalBlockPreset: root.goalBlockPreset,
             goalWeekendsEnabled: root.goalWeekendsEnabled,
+            pendingSession: (root.isStudySession && root.sessionDuration >= 60) ? {
+                duration: root.sessionDuration,
+                tag: root.activeTag || "General",
+                mode: root.activeMode
+            } : null,
             lastSaved: new Date().toISOString()
         }
         dataFile.setText(JSON.stringify(payload, null, 2))
@@ -193,6 +226,9 @@ BarWidget {
         onTriggered: {
             if (root.isStudySession) {
                 root.sessionDuration += 1
+                if (root.sessionDuration % 60 === 0) {
+                    root.saveToDisk()
+                }
             }
 
             if (root.activeMode === "pomodoro") {
@@ -292,17 +328,17 @@ BarWidget {
         var sec = Math.round(seconds)
         if (phase === "work") {
             root.pomodoroWorkDuration = sec
-            if (!root.isRunning && root.pomodoroPhase === "work" && root.activeMode === "pomodoro") {
+            if (!root.isRunning && root.sessionDuration === 0 && root.pomodoroPhase === "work" && root.activeMode === "pomodoro") {
                 root.remainingSeconds = sec
             }
         } else if (phase === "shortBreak") {
             root.pomodoroShortBreakDuration = sec
-            if (!root.isRunning && root.pomodoroPhase === "shortBreak" && root.activeMode === "pomodoro") {
+            if (!root.isRunning && root.sessionDuration === 0 && root.pomodoroPhase === "shortBreak" && root.activeMode === "pomodoro") {
                 root.remainingSeconds = sec
             }
         } else if (phase === "longBreak") {
             root.pomodoroLongBreakDuration = sec
-            if (!root.isRunning && root.pomodoroPhase === "longBreak" && root.activeMode === "pomodoro") {
+            if (!root.isRunning && root.sessionDuration === 0 && root.pomodoroPhase === "longBreak" && root.activeMode === "pomodoro") {
                 root.remainingSeconds = sec
             }
         }
@@ -316,7 +352,7 @@ BarWidget {
         if (root.pomodoroLongBreakDuration <= 0 && root.pomodoroPhase === "longBreak") {
             root.pomodoroPhase = "shortBreak"
         }
-        if (!root.isRunning && root.activeMode === "pomodoro") {
+        if (!root.isRunning && root.sessionDuration === 0 && root.activeMode === "pomodoro") {
             if (root.pomodoroPhase === "work") root.remainingSeconds = root.pomodoroWorkDuration
             else if (root.pomodoroPhase === "shortBreak") root.remainingSeconds = root.pomodoroShortBreakDuration
             else if (root.pomodoroPhase === "longBreak") root.remainingSeconds = root.pomodoroLongBreakDuration

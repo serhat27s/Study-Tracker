@@ -75,9 +75,25 @@ const afterMidnight = new Date(2026, 9, 14, 1, 0, 0); // 01:00 local time
 const splitRecs = Model.splitSessionRecords(3 * 3600, afterMidnight, "Coding", "tracker");
 assert.strictEqual(splitRecs.length, 2);
 assert.strictEqual(splitRecs[0].duration, 3600);  // 00:00..01:00 on Oct 14
+assert.strictEqual(splitRecs[0].fullDuration, 3 * 3600);
 assert.strictEqual(Model.dateKey(new Date(splitRecs[0].timestamp)), "2026-10-14");
 assert.strictEqual(splitRecs[1].duration, 7200);  // 22:00..24:00 on Oct 13 (no 1s loss)
+assert.strictEqual(splitRecs[1].fullDuration, 0);
 assert.strictEqual(Model.dateKey(new Date(splitRecs[1].timestamp)), "2026-10-13");
+
+// Verify that midnight-split sessions preserve blocks & deep work tier
+const todayEarly = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 30, 0);
+const cross90 = Model.splitSessionRecords(90 * 60, todayEarly, "Coding", "pomodoro");
+assert.strictEqual(cross90.length, 2);
+assert.strictEqual(cross90[0].fullDuration, 90 * 60);
+assert.strictEqual(cross90[1].fullDuration, 0);
+const crossBlocks = Model.calculateConsistency(cross90, 0, { goalMode: "blocks", targetBlocks: 1, blockPreset: "ultradian" });
+assert.strictEqual(crossBlocks.weekDays.reduce((acc, d) => acc + d.blocks, 0), 1);
+const crossQual = Model.calculateSessionQuality(cross90, "all");
+assert.strictEqual(crossQual.totalCount, 1);
+assert.strictEqual(crossQual.tiers[0].count, 1); // Classified as Deep (>= 50m)
+assert.strictEqual(crossQual.tiers[1].count, 0);
+assert.strictEqual(crossQual.tiers[2].count, 0);
 
 // 7. Rest-day streak bridging across weekends when weekendsEnabled is false
 const streakHist = [];

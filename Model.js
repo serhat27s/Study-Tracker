@@ -242,6 +242,7 @@ function splitSessionRecords(durationSeconds, endDate, tag, mode) {
                 tag: tag || "General",
                 mode: mode || "pomodoro",
                 duration: segSec,
+                fullDuration: (idx === 0) ? dur : 0,
                 timestamp: tsDate.toISOString()
             });
             idx++;
@@ -309,7 +310,8 @@ function calculateSessionQuality(history, scope) {
         var sess = historyList[i];
         if (!sess || !sess.duration) continue;
         if (!matchesScope(sess.timestamp)) continue;
-        var d = sess.duration;
+        var d = (typeof sess.fullDuration === "number") ? sess.fullDuration : sess.duration;
+        if (d <= 0) continue;
         if (d >= deepMinSec) {
             deepSec += d;
             deepCount++;
@@ -552,7 +554,8 @@ function calculateConsistency(history, liveSessionSeconds, config) {
         var k = dateKey(new Date(sess.timestamp));
         var dObj = ensureDay(k);
         dObj.seconds += sess.duration;
-        dObj.blocks += sessionBlocksCount(sess.duration, bMin);
+        var bDur = (typeof sess.fullDuration === "number") ? sess.fullDuration : sess.duration;
+        dObj.blocks += sessionBlocksCount(bDur, bMin);
     }
 
     var now = new Date();
