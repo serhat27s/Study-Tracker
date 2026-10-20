@@ -32,15 +32,22 @@ An Omarchy status bar plugin for tracking study sessions, subjects, consistency 
 - `1` / `2` or `←` / `→`: Switch between *Focus* and *Statistics* tabs
 - `Esc`: Close menu or panel
 
-## Installation
+## Install
 
-Copy the plugin to your Omarchy plugins directory and enable it:
+```sh
+omarchy plugin add https://github.com/sersah/Study-Tracker.git --enable
+```
 
-```bash
-mkdir -p ~/.config/omarchy/plugins/io.github.sersah.study-tracker
-cp -r ./* ~/.config/omarchy/plugins/io.github.sersah.study-tracker/
-omarchy-shell shell rescanPlugins
-omarchy plugin enable io.github.sersah.study-tracker --section center
+## Configure
+
+```sh
+omarchy bar move io.github.sersah.study-tracker --section center
+```
+
+## Remove
+
+```sh
+omarchy plugin remove io.github.sersah.study-tracker
 ```
 
 ## Data Storage
