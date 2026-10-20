@@ -1,30 +1,90 @@
 # Study Tracker
 
-An Omarchy status bar plugin for tracking study sessions, subjects, consistency goals, and session depth.
+An Omarchy bar plugin for tracking study sessions, subjects, consistency goals, and session depth, without leaving your desktop.
 
 ![Preview](preview.png)
 
 ## Features
 
-- **Focus Timer**: Pomodoro (*Standard*, *Deep Work*, *Ultradian* presets + custom intervals) and Stopwatch with desktop notifications, auto-save (`≥ 1m`).
-- **Subjects**: Instant search, creation, archiving.
-- **Activity Heatmap**: Full-year scrollable calendar grid with month jump, hover details, and streak counter.
-- **Statistics**: Daily goal tracker (Hours or Blocks with optional weekend rest days), subject donut chart, and session depth breakdown (*Deep*, *Focused*, *Shallow*).
+### Focus Timer
+- **Pomodoro** with presets: *Standard*, *Deep Work*, *Ultradian*, plus custom intervals
+- **Stopwatch** for open-ended sessions
+- Desktop notifications when a phase ends
+- Sessions of one minute or longer are saved automatically
 
-## Controls & Shortcuts
+### Subjects
+- Instant search
+- Create subjects
+- Archive subjects you no longer study
 
-- **Bar Widget**: `Left Click` toggle panel · `Right Click` start / pause
-- **Panel**: `Space`/`Enter` start / pause · `r`/`s` reset · `m` switch mode · `t` subjects · `1`/`2` or `←`/`→` switch tabs · `Esc` close
+### Activity Heatmap
+- Full-year scrollable calendar grid
+- Jump to any month
+- Hover for per-day details
+- Streak counter
 
-## Install & Manage
+### Statistics
+- **Daily goal tracker** in hours or blocks, with optional weekend rest days
+- **Subject breakdown** as a donut chart
+- **Session depth** breakdown: *Deep*, *Focused*, *Shallow*
 
-```sh
-# Install 
+## Installation
+
+```bash
 omarchy plugin add https://github.com/sersah/Study-Tracker.git --enable
+```
 
-# Update / Remove
+Update or remove:
+
+```bash
 omarchy plugin update io.github.sersah.study-tracker
 omarchy plugin remove io.github.sersah.study-tracker
 ```
 
-Data is stored in `~/.local/share/study-tracker/data.json`.
+## Usage
+
+### Bar widget
+
+| Action | Result |
+| --- | --- |
+| Left click | Toggle the panel |
+| Right click | Start / pause the timer with selected subject |
+
+### Panel shortcuts
+
+| Key | Action |
+| --- | --- |
+| `Space` / `Enter` | Start / pause |
+| `r` / `s` | Reset |
+| `m` | Switch mode (Pomodoro / Stopwatch) |
+| `t` | Open subjects |
+| `←` / `→` | Switch tabs |
+| `Esc` | Close the panel |
+
+## Data
+
+All data is stored locally in a single JSON file:
+
+```
+~/.local/share/study-tracker/data.json
+```
+
+## Project structure
+
+```
+BarWidget.qml     Status bar widget
+Panel.qml         Main panel UI
+ColorPicker.qml   Color picker component
+Model.js          Data and logic
+manifest.json     Plugin manifest
+test.js           Tests
+preview.png       Screenshot
+```
+
+## Development
+
+This project was fully built with AI assistance. Tested through daily use, no formal review of the code.
+
+## License
+
+[MIT](LICENSE)
