@@ -70,8 +70,14 @@ BarWidget {
 
     Process {
         id: ensureDir
-        command: ["mkdir", "-p", root.dataDir]
-        onExited: dataFile.path = root.dataPath
+        command: ["sh", "-c", "mkdir -m 700 -p \"$1\" && chmod 700 \"$1\" && (umask 077 && touch \"$2\") && chmod 600 \"$2\"", "sh", root.dataDir, root.dataPath]
+        onExited: function(exitCode) {
+            if (exitCode === 0) {
+                dataFile.path = root.dataPath
+            } else {
+                console.warn("StudyTracker: failed to secure storage permissions (exit code " + exitCode + "), sessions will not be persisted.")
+            }
+        }
     }
 
     FileView {

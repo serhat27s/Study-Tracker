@@ -175,4 +175,34 @@ assert.strictEqual(qual.tiers[1].count, 1); // Focused
 assert.strictEqual(qual.tiers[2].count, 1); // Shallow
 assert.strictEqual(qual.deepPct, 67);
 
+// 9. Storage permission protection & repair (0700 dir, 0600 data.json)
+const { execFileSync } = require("child_process");
+const os = require("os");
+const path = require("path");
+const barQml = fs.readFileSync(__dirname + "/BarWidget.qml", "utf8");
+const cmdMatch = barQml.match(/command:\s*\["sh",\s*"-c",\s*"((?:[^"\\]|\\.)*)"/);
+assert.ok(cmdMatch, "ensureDir shell command found in BarWidget.qml");
+const shellCmd = JSON.parse(`"${cmdMatch[1]}"`);
+const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "study-tracker-test-"));
+try {
+    const freshDir = path.join(tmpRoot, "fresh", "study-tracker");
+    const freshFile = path.join(freshDir, "data.json");
+    execFileSync("sh", ["-c", `umask 022; ${shellCmd}`, "sh", freshDir, freshFile]);
+    assert.strictEqual(fs.statSync(freshDir).mode & 0o777, 0o700);
+    assert.strictEqual(fs.statSync(freshFile).mode & 0o777, 0o600);
+
+    const existingDir = path.join(tmpRoot, "existing");
+    const existingFile = path.join(existingDir, "data.json");
+    fs.mkdirSync(existingDir, 0o755);
+    fs.chmodSync(existingDir, 0o755);
+    fs.writeFileSync(existingFile, '{"history":[{"id":"1"}]}', { mode: 0o644 });
+    fs.chmodSync(existingFile, 0o644);
+    execFileSync("sh", ["-c", `umask 022; ${shellCmd}`, "sh", existingDir, existingFile]);
+    assert.strictEqual(fs.statSync(existingDir).mode & 0o777, 0o700);
+    assert.strictEqual(fs.statSync(existingFile).mode & 0o777, 0o600);
+    assert.strictEqual(fs.readFileSync(existingFile, "utf8"), '{"history":[{"id":"1"}]}');
+} finally {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+}
+
 console.log("All Model.js tests passed.");
